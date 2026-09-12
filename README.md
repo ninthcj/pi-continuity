@@ -28,13 +28,12 @@ For the real SDK host, install the audited Pi version in the project and run:
 npm install @earendil-works/pi-coding-agent@0.85.1
 npx pi --version
 
-# Native Pi TUI with Continuity active
-$env:PI_CONTINUITY_MODE="active"
+# Native Pi TUI with Continuity active (the project extension defaults to active)
 npx pi
 
 # Host wrapper with strict provider gate
 npx pi-continuity-pi "ship the feature" --runtime
-px pi-continuity-pi "ship the feature" --runtime --off
+npx pi-continuity-pi "ship the feature" --runtime --off
 node examples/pi-faux-sdk.mjs
 ```
 

@@ -1,5 +1,5 @@
 // Pi 0.85.1 extension seam. Put this file in .pi/extensions and run with
-// PI_CONTINUITY_MODE=record|active pi (default is off).
+// PI_CONTINUITY_MODE=off|record|active pi (default is active).
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -14,7 +14,7 @@ export default function continuity(pi) {
   let taskId;
   let cwd;
   let branch;
-  const mode = process.env.PI_CONTINUITY_MODE ?? "off";
+  const mode = process.env.PI_CONTINUITY_MODE ?? "active";
   const budget = Number(process.env.PI_CONTINUITY_BUDGET ?? 12000);
   const redact = value => Array.isArray(value) ? value.map(redact) : (value && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([k,v]) => [/(?:api[-_]?key|authorization|token|password|secret)/i.test(k) ? k : k, /(?:api[-_]?key|authorization|token|password|secret)/i.test(k) ? "[REDACTED]" : redact(v)])) : value);
 
