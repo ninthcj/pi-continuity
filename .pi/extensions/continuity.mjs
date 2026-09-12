@@ -78,7 +78,11 @@ export default function continuity(pi) {
   // Own Pi's compaction summary in active mode while retaining Pi's raw JSONL.
   pi.on("session_before_compact", async (event, ctx) => {
     const task = ensure(ctx);
-    if (hostOnly || !task || mode !== "active") return;
+    // The SDK host owns provider injection through ModelRuntime, but the
+    // public SDK still dispatches compaction through Pi's extension seam.
+    // Keep this hook enabled in host mode so the native session never falls
+    // back to Pi's heuristic summary.
+    if (!task || mode !== "active") return;
     const preparation = event?.preparation ?? {};
     const view = store.compressContext(task.task_id, { epoch: task.epoch, budget });
     return { compaction: { summary: renderCompression(view), firstKeptEntryId: preparation.firstKeptEntryId, tokensBefore: preparation.tokensBefore ?? view.tokensBefore, details: { viewId: view.viewId, strategy: 'deterministic-extract-v3', sourceEventIds: view.sourceEventIds, omittedEventIds: view.omittedEventIds } } };

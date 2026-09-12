@@ -77,6 +77,13 @@ export async function createContinuityPiSession({
       store.recordWork(task.task_id, 'pi_agent_retry', { willRetry: true }, { epoch });
     } else if (event.type === 'entry_appended') {
       recordEvidence('pi_session_entry', { entry: event.entry }, epoch);
+      const message = event.entry?.message;
+      if (message?.role === 'user') {
+        const content = Array.isArray(message.content)
+          ? message.content.filter(block => block?.type === 'text').map(block => block.text).join(' ')
+          : String(message.content ?? '');
+        store.recordEvent(task.task_id, 'user_input', { text: content, sessionEntryId: event.entry?.id }, { epoch });
+      }
     }
   };
   const bindSession = () => { unsubscribe?.(); unsubscribe = sessionResult.session.subscribe(onSessionEvent); };

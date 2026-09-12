@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ContinuityStore } from '../src/core.mjs';
@@ -113,5 +113,30 @@ test('Pi active compaction uses continuity compression and extracts memory', asy
   store.close();
   await handlers.get('session_shutdown')({}, ctx);
   if (previous === undefined) delete process.env.PI_CONTINUITY_MODE; else process.env.PI_CONTINUITY_MODE = previous;
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('Pi host mode keeps Continuity in charge of native compaction', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pi-ext-host-compact-'));
+  const previousMode = process.env.PI_CONTINUITY_MODE;
+  const previousHost = process.env.PI_CONTINUITY_HOST;
+  process.env.PI_CONTINUITY_MODE = 'active';
+  process.env.PI_CONTINUITY_HOST = '1';
+  const bootstrap = new ContinuityStore(join(dir, '.pi', 'continuity.db'), { mode: 'active' });
+  const task = bootstrap.createTask(dir, 'unknown', 'host compaction');
+  bootstrap.close();
+  writeFileSync(join(dir, '.pi', 'continuity-task.json'), JSON.stringify({ taskId: task.task_id }));
+  const { default: extension } = await import(`../.pi/extensions/continuity.mjs?host-compact-test=${Date.now()}`);
+  const handlers = new Map();
+  extension({ on(name, fn) { handlers.set(name, fn); }, registerCommand() {} });
+  const ctx = { cwd: dir, ui: { setStatus() {}, notify() {} } };
+  const result = await handlers.get('session_before_compact')({ preparation: { tokensBefore: 9000 } }, ctx);
+  assert.match(result.compaction.summary, /Compressed Context/);
+  const store = new ContinuityStore(join(dir, '.pi', 'continuity.db'), { mode: 'active' });
+  assert.equal(store.row('SELECT COUNT(*) AS n FROM compression_views').n, 1);
+  store.close();
+  await handlers.get('session_shutdown')({}, ctx);
+  if (previousMode === undefined) delete process.env.PI_CONTINUITY_MODE; else process.env.PI_CONTINUITY_MODE = previousMode;
+  if (previousHost === undefined) delete process.env.PI_CONTINUITY_HOST; else process.env.PI_CONTINUITY_HOST = previousHost;
   rmSync(dir, { recursive: true, force: true });
 });

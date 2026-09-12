@@ -25,6 +25,7 @@ test('real SDK host binds the continuity runtime and records Pi entries', async 
   assert.equal(calls.length, 1);
   assert.match(calls[0].systemPrompt, /continuity manifest/);
   assert.ok(result.store.events(result.task.task_id).some(event => event.source === 'pi_session_entry'));
+  assert.ok(result.store.events(result.task.task_id).some(event => event.source === 'user_input'));
   result.store.transition(result.task.task_id, 'RECOVERY_REQUIRED', 'test');
   assert.throws(() => result.preflight(), GateError);
   await result.close();
