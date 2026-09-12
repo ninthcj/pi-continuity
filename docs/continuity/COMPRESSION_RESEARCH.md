@@ -18,7 +18,7 @@ The continuity store already has an append-only event ledger, normalized memory 
 - rank events by source and explicit risk or decision signals;
 - retain high-value events when the budget allows;
 - extract labeled `Decision`, `Fact`, `Constraint`, and `Next step` values from structured payloads or response text;
-- write extracted values as proposed memory claims with the source event as evidence;
+- write extracted values as compression-origin memory candidates with the source event as evidence; ordinary memory recall excludes these candidates until a direct claim promotes an equal value;
 - include current memory claims as semantic context;
 - persist the compressed view, source event IDs, omitted event IDs, token estimates, strategy version, epoch, and revision;
 - expose `expandCompressionView()` so the retained or omitted source events can be read again without changing history.
@@ -33,4 +33,4 @@ A compression view is acceptable when it keeps the task anchor, stays within the
 
 ## Next integration boundary
 
-Pi's `session_before_compact` hook now calls `compressContext()` in active mode and returns a Pi compaction entry whose summary is the rendered view. Full memory and compression takeover means Pi's native session remains the raw trace, while continuity owns the semantic memory and model-visible compressed context; the remaining work is production observation and replacing any separate native long-term memory injector.
+Pi's `session_before_compact` hook now calls `compressContext()` in active mode and returns a Pi compaction entry whose summary is the rendered view. Compression candidates carry explicit provenance and remain out of ordinary recall until promoted by a direct claim. Full memory and compression takeover means Pi's native session remains the raw trace, while continuity owns the semantic memory and model-visible compressed context; the remaining work is production observation and replacing any separate native long-term memory injector.

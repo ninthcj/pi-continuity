@@ -183,3 +183,18 @@ test('compression preserves full extracted claims when no budget is imposed', ()
   assert.equal(view.omittedEventIds.length, 0);
   close(x);
 });
+
+test('compression candidates stay separate from authoritative memory until promoted', () => {
+  const x = setup();
+  const candidate = x.store.recordMemoryClaim(x.task.task_id, 1, { subject: 'deploy', predicate: 'target', value: 'preview', status: 'proposed', origin: 'compression', evidenceIds: ['evt-compress'] }).memory;
+  assert.equal(candidate.origin, 'compression');
+  assert.equal(x.store.memoryClaims(x.task.task_id).length, 0);
+  assert.equal(x.store.memoryClaims(x.task.task_id, { includeCandidates: true }).length, 1);
+  assert.equal(x.store.recallMemory(x.task.task_id, 'deploy target').length, 0);
+  assert.equal(x.store.recallMemory(x.task.task_id, 'deploy target', { includeCandidates: true }).length, 1);
+  const promoted = x.store.recordMemoryClaim(x.task.task_id, 1, { subject: 'deploy', predicate: 'target', value: 'preview', status: 'confirmed', evidenceIds: ['evt-direct'] });
+  assert.equal(promoted.kind, 'promoted');
+  assert.equal(x.store.memoryClaims(x.task.task_id)[0].origin, 'direct');
+  assert.deepEqual(x.store.memoryClaims(x.task.task_id)[0].evidenceIds, ['evt-compress', 'evt-direct']);
+  close(x);
+});
