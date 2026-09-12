@@ -1,6 +1,6 @@
 # Independent audit
 
-Audit scope: `src/core.mjs`, `src/adapter.mjs`, `src/pi-sdk.mjs`, `src/pi-host.mjs`, `.pi/extensions/continuity.mjs`, and the 48 offline tests. The audit was performed after the implementation pass and is separate from the feature checklist.
+Audit scope: `src/core.mjs`, `src/adapter.mjs`, `src/pi-sdk.mjs`, `src/pi-host.mjs`, `.pi/extensions/continuity.js`, and the 53 offline tests. The audit was performed after the implementation pass and is separate from the feature checklist.
 
 ## Blocking risk for strict active mode
 
@@ -8,7 +8,7 @@ Pi 0.85.1 exposes `before_provider_request` for payload inspection/replacement, 
 
 ## Accepted residual risks
 
-- The installed Pi distribution is a bundled binary, so final provider serialization and internal retry/compaction code were not source-audited locally. The extension records the public lifecycle only.
+- The npm Pi package exposes the SDK and native CLI, but final provider serialization and internal retry/compaction behavior remain owned by Pi. The extension records the public lifecycle only.
 - The core fingerprints explicitly selected files and Git state. It does not claim whole-worktree equivalence when coverage is `selected` or `none`.
 - `practical` resume imports only event ids explicitly supplied by the caller; it does not infer failure experience. Unknown external operations remain unknown and are not replayed.
 - The extension stores project-local SQLite data under `.pi`; Pi's own documentation says extensions run with process permissions. Strong isolation still requires a sandbox/container.

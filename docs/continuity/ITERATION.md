@@ -16,7 +16,7 @@ Implemented iterations, in order:
 4. Operation intents, idempotent completed results, and unknown-on-restart behavior.
 5. Ordered handoff state machine and two-phase checkpoint publication.
 6. Inspect-only checkpoint reads, explicit strict/practical imports, and workspace fingerprints.
-7. Real Pi extension using verified 0.85.1 hooks, read-only `/continuity` status/inspect/resume commands, and default-off mode.
+7. Real Pi extension using verified 0.85.1 hooks, read-only `/continuity` status/inspect/resume commands, and active-by-default mode.
 8. SQLite `VACUUM INTO` backup plus referenced blob copies.
 9. Workspace path containment, recovery-state provider gating, explicit confirmation actor checks, and credential-shaped field redaction.
 10. Structured memory claims with normalized duplicate detection, informational conflicts, immutable claim-set snapshots, three-way merge proposals, merge commits with two parents, bounded scoped recall, portable bundles, and non-destructive compression views.

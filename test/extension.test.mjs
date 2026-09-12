@@ -9,7 +9,7 @@ test('Pi 0.85 extension records input and injects a manifest', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'pi-ext-'));
   const previous = process.env.PI_CONTINUITY_MODE;
   process.env.PI_CONTINUITY_MODE = 'active';
-  const { default: extension } = await import(`../.pi/extensions/continuity.mjs?test=${Date.now()}`);
+  const { default: extension } = await import(`../.pi/extensions/continuity.js?test=${Date.now()}`);
   const handlers = new Map();
   const commands = new Map();
   const pi = { on(name, fn) { handlers.set(name, fn); }, registerCommand(name, spec) { commands.set(name, spec); } };
@@ -35,7 +35,7 @@ test('Pi extension record mode preserves native agent input', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'pi-ext-record-'));
   const previous = process.env.PI_CONTINUITY_MODE;
   process.env.PI_CONTINUITY_MODE = 'record';
-  const { default: extension } = await import(`../.pi/extensions/continuity.mjs?record-test=${Date.now()}`);
+  const { default: extension } = await import(`../.pi/extensions/continuity.js?record-test=${Date.now()}`);
   const handlers = new Map();
   const pi = { on(name, fn) { handlers.set(name, fn); }, registerCommand() {} };
   extension(pi);
@@ -52,7 +52,7 @@ test('Pi continuity command exposes read-only diff and host-confirmed correction
   const dir = mkdtempSync(join(tmpdir(), 'pi-ext-ui-'));
   const previous = process.env.PI_CONTINUITY_MODE;
   process.env.PI_CONTINUITY_MODE = 'active';
-  const { default: extension } = await import(`../.pi/extensions/continuity.mjs?ui-test=${Date.now()}`);
+  const { default: extension } = await import(`../.pi/extensions/continuity.js?ui-test=${Date.now()}`);
   const handlers = new Map(); const commands = new Map(); const messages = [];
   const pi = { on(name, fn) { handlers.set(name, fn); }, registerCommand(name, spec) { commands.set(name, spec); } };
   extension(pi);
@@ -75,7 +75,7 @@ test('Pi tool hook blocks a restarted unknown side effect operation', async () =
   const dir = mkdtempSync(join(tmpdir(), 'pi-ext-tool-'));
   const previous = process.env.PI_CONTINUITY_MODE;
   process.env.PI_CONTINUITY_MODE = 'active';
-  const { default: extension } = await import(`../.pi/extensions/continuity.mjs?tool-test=${Date.now()}`);
+  const { default: extension } = await import(`../.pi/extensions/continuity.js?tool-test=${Date.now()}`);
   const handlers = new Map();
   const makePi = () => ({ on(name, fn) { handlers.set(name, fn); }, registerCommand() {} });
   extension(makePi());
@@ -99,7 +99,7 @@ test('Pi active compaction uses continuity compression and extracts memory', asy
   const dir = mkdtempSync(join(tmpdir(), 'pi-ext-compact-'));
   const previous = process.env.PI_CONTINUITY_MODE;
   process.env.PI_CONTINUITY_MODE = 'active';
-  const { default: extension } = await import(`../.pi/extensions/continuity.mjs?compact-test=${Date.now()}`);
+  const { default: extension } = await import(`../.pi/extensions/continuity.js?compact-test=${Date.now()}`);
   const handlers = new Map();
   const pi = { on(name, fn) { handlers.set(name, fn); }, registerCommand() {} };
   extension(pi);
@@ -126,7 +126,7 @@ test('Pi host mode keeps Continuity in charge of native compaction', async () =>
   const task = bootstrap.createTask(dir, 'unknown', 'host compaction');
   bootstrap.close();
   writeFileSync(join(dir, '.pi', 'continuity-task.json'), JSON.stringify({ taskId: task.task_id }));
-  const { default: extension } = await import(`../.pi/extensions/continuity.mjs?host-compact-test=${Date.now()}`);
+  const { default: extension } = await import(`../.pi/extensions/continuity.js?host-compact-test=${Date.now()}`);
   const handlers = new Map();
   extension({ on(name, fn) { handlers.set(name, fn); }, registerCommand() {} });
   const ctx = { cwd: dir, ui: { setStatus() {}, notify() {} } };

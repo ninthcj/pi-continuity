@@ -13,11 +13,11 @@ Requires Node.js 22 or newer (Node 24's built-in `node:sqlite` is used; no npm i
 ```powershell
 npm test
 npm run demo
-node .\bin\pi-continuity.mjs .\local.db create "ship the feature"
-node .\bin\pi-continuity.mjs .\local.db status <task_id>
-node .\bin\pi-continuity.mjs .\local.db manifest <task_id> --active
-node .\bin\pi-continuity.mjs .\local.db inspect <task_id> --checkpoint <checkpoint_id>
-node .\bin\pi-continuity.mjs .\local.db resume <task_id> --checkpoint <checkpoint_id> --revision 1
+node .\bin\pi-continuity.js .\local.db create "ship the feature"
+node .\bin\pi-continuity.js .\local.db status <task_id>
+node .\bin\pi-continuity.js .\local.db manifest <task_id> --active
+node .\bin\pi-continuity.js .\local.db inspect <task_id> --checkpoint <checkpoint_id>
+node .\bin\pi-continuity.js .\local.db resume <task_id> --checkpoint <checkpoint_id> --revision 1
 ```
 
 The demo writes only to `.demo/`. The core does not install a global Pi package or change user Pi configuration.
@@ -56,7 +56,7 @@ const compact = store.compressMemorySnapshot(merged.snapshot_id, taskId);
 
 ## Real Pi 0.85.1 extension
 
-The local WinGet install is `@earendil-works/pi-coding-agent` 0.85.1. The project extension at `.pi/extensions/continuity.mjs` uses its verified lifecycle API, records raw input and tool/provider events, injects a manifest before each agent run and owns Pi compaction summaries in `active` mode, and exposes `/continuity` for a read-only status view. Run it from this repository with `PI_CONTINUITY_MODE=record pi` or `PI_CONTINUITY_MODE=active pi`. The extension is deliberately default-off. Pi's public `before_provider_request` hook has no blocking return, so strict zero-provider-call enforcement remains in the host adapter and is not claimed for an extension-only deployment.
+The project uses the npm installation of `@earendil-works/pi-coding-agent` 0.85.1. The auto-discovered project extension at `.pi/extensions/continuity.js` uses Pi's verified lifecycle API, records raw input and tool/provider events, injects a manifest before each agent run, owns Pi compaction summaries in `active` mode, and exposes `/continuity` for a read-only status view. The extension defaults to `active`; set `PI_CONTINUITY_MODE=off` for a native baseline or `record` for audit-only mode.
 
 ## Scope
 
