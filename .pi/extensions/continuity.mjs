@@ -70,6 +70,19 @@ export default function continuity(pi) {
     }
   });
 
+  function renderCompression(view) {
+    const lines = ['## Goal', view.goal || '(none)', '## Constraints', ...(view.constraints ?? []).map(x => `- ${x}`), '## Compressed Context', ...view.keptEvents.map(x => `- [${x.source}] ${x.text}`), '## Extracted Memory', ...view.extracted.map(x => `- ${x.predicate}: ${x.value} (memory ${x.memoryId})`), '## Recovery', `compression view ${view.viewId}; omitted events: ${view.omittedEventIds.length}`];
+    return lines.join('\n');
+  }
+
+  // Own Pi's compaction summary in active mode while retaining Pi's raw JSONL.
+  pi.on("session_before_compact", async (event, ctx) => {
+    const task = ensure(ctx);
+    if (hostOnly || !task || mode !== "active") return;
+    const preparation = event?.preparation ?? {};
+    const view = store.compressContext(task.task_id, { epoch: task.epoch, budget, recent: 12, keepFirst: 1 });
+    return { compaction: { summary: renderCompression(view), firstKeptEntryId: preparation.firstKeptEntryId, tokensBefore: preparation.tokensBefore ?? view.tokensBefore, details: { viewId: view.viewId, strategy: 'deterministic-extract-v1', sourceEventIds: view.sourceEventIds, omittedEventIds: view.omittedEventIds } } };
+  });
   // This is the real Pi pre-agent integration point. The injected message is
   // traceable to an immutable manifest; UI-only status never enters context.
   pi.on("before_agent_start", async (event, ctx) => {

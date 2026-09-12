@@ -94,3 +94,24 @@ test('Pi tool hook blocks a restarted unknown side effect operation', async () =
   if (previous === undefined) delete process.env.PI_CONTINUITY_MODE; else process.env.PI_CONTINUITY_MODE = previous;
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('Pi active compaction uses continuity compression and extracts memory', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pi-ext-compact-'));
+  const previous = process.env.PI_CONTINUITY_MODE;
+  process.env.PI_CONTINUITY_MODE = 'active';
+  const { default: extension } = await import(`../.pi/extensions/continuity.mjs?compact-test=${Date.now()}`);
+  const handlers = new Map();
+  const pi = { on(name, fn) { handlers.set(name, fn); }, registerCommand() {} };
+  extension(pi);
+  const ctx = { cwd: dir, ui: { setStatus() {}, notify() {} } };
+  await handlers.get('input')({ text: 'Decision: keep the SQLite ledger\nNext step: wire compression' }, ctx);
+  const result = await handlers.get('session_before_compact')({ preparation: { firstKeptEntryId: 'entry-1', tokensBefore: 9000 } }, ctx);
+  assert.equal(result.compaction.firstKeptEntryId, 'entry-1');
+  assert.match(result.compaction.summary, /Extracted Memory/);
+  const store = new ContinuityStore(join(dir, '.pi', 'continuity.db'), { mode: 'active' });
+  assert.equal(store.row('SELECT COUNT(*) AS n FROM compression_views').n, 1);
+  store.close();
+  await handlers.get('session_shutdown')({}, ctx);
+  if (previous === undefined) delete process.env.PI_CONTINUITY_MODE; else process.env.PI_CONTINUITY_MODE = previous;
+  rmSync(dir, { recursive: true, force: true });
+});

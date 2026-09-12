@@ -33,4 +33,4 @@ A compression view is acceptable when it keeps the task anchor, stays within the
 
 ## Next integration boundary
 
-The next step is to have Pi's `session_before_compact` hook call `compressContext()` and return a Pi compaction entry whose summary is the rendered view. That should happen only after the deterministic view is stable in real sessions. Full memory and compression takeover then means Pi's native session remains the raw trace, while continuity owns the semantic memory and model-visible compressed context.
+Pi's `session_before_compact` hook now calls `compressContext()` in active mode and returns a Pi compaction entry whose summary is the rendered view. Full memory and compression takeover means Pi's native session remains the raw trace, while continuity owns the semantic memory and model-visible compressed context; the remaining work is production observation and replacing any separate native long-term memory injector.
