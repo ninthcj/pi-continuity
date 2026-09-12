@@ -154,3 +154,21 @@ test('memory history is readable across task epochs without a freshness gate', (
   assert.equal(x.store.recallMemory(x.task.task_id, 'history epoch 99').length, 1);
   close(x);
 });
+
+test('compression extracts key claims and can expand omitted history', () => {
+  const x = setup();
+  x.store.recordEvent(x.task.task_id, 'model_response', { text: 'Decision: use SQLite\nNext step: add an index' });
+  for (let i = 0; i < 12; i++) x.store.recordEvent(x.task.task_id, 'tool_result', { output: `verbose result ${i} ${'x'.repeat(180)}` });
+  const view = x.store.compressContext(x.task.task_id, { budget: 700, recent: 2, keepFirst: 1 });
+  assert.equal(view.format, 'pi-continuity-compression-v1');
+  assert.ok(view.extracted.some(claim => claim.predicate === 'decision'));
+  assert.ok(view.extracted.some(claim => claim.predicate === 'next_step'));
+  assert.ok(view.omittedEventIds.length > 0);
+  assert.ok(view.tokensAfter <= 700);
+  const reopened = x.store.compressionView(view.viewId, x.task.task_id);
+  assert.deepEqual(reopened.omittedEventIds, view.omittedEventIds);
+  const expanded = x.store.expandCompressionView(view.viewId, x.task.task_id, { includeOmitted: true });
+  assert.equal(expanded.events.length, view.sourceEventIds.length);
+  assert.ok(expanded.memories.some(memory => memory.predicate === 'decision'));
+  close(x);
+});
