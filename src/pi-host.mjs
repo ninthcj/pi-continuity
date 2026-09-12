@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { ContinuityStore, ScopeError, CheckpointError } from './core.mjs';
 import { createContinuityModelRuntime, assertContinuityReady } from './pi-sdk.mjs';
@@ -29,9 +30,10 @@ export async function createContinuityPiSession({
   const actualBranch = branch ?? (() => { try { return execFileSync('git', ['-C', cwd, 'branch', '--show-current'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || 'detached'; } catch { return 'unknown'; } })();
   const store = new ContinuityStore(dbPath, { mode });
   const task = store.createTask(projectId, actualBranch, goal, { acceptance, constraints });
+  const piAgentDir = sessionOptions.agentDir ?? (typeof pi.getAgentDir === 'function' ? pi.getAgentDir() : join(homedir(), '.pi', 'agent'));
   const runtime = modelRuntime ?? await pi.ModelRuntime.create({
-    authPath: join(cwd, '.pi', 'auth.json'),
-    modelsPath: join(cwd, '.pi', 'models.json'),
+    authPath: sessionOptions.authPath ?? join(piAgentDir, 'auth.json'),
+    modelsPath: sessionOptions.modelsPath ?? join(piAgentDir, 'models.json'),
     refreshOnCreate: false,
   });
   const gatedRuntime = createContinuityModelRuntime(runtime, store, task.task_id, { budget });
@@ -65,6 +67,18 @@ export async function createContinuityPiSession({
       store.recordEvent(task.task_id, source, payload, { epoch });
     }
   };
+  const seenUserMessages = new Set();
+  const recordUserMessage = (message, entryId) => {
+    if (message?.role !== 'user') return;
+    const content = Array.isArray(message.content)
+      ? message.content.filter(block => block?.type === 'text').map(block => block.text).join(' ')
+      : String(message.content ?? '');
+    const key = entryId ?? String(message.timestamp ?? '') + ':' + content;
+    if (seenUserMessages.has(key)) return;
+    seenUserMessages.add(key);
+    const epoch = store.getTask(task.task_id).epoch;
+    store.recordEvent(task.task_id, 'user_input', { text: content, sessionEntryId: entryId }, { epoch });
+  };
   const onSessionEvent = event => {
     const epoch = store.getTask(task.task_id).epoch;
     if (event.type === 'turn_start' || event.type === 'turn_end' || event.type === 'agent_settled' || event.type === 'queue_update' || event.type === 'compaction_start' || event.type === 'compaction_end' || event.type === 'auto_retry_start' || event.type === 'auto_retry_end') {
@@ -75,15 +89,10 @@ export async function createContinuityPiSession({
       recordEvidence('tool_result', { toolCallId: event.toolCallId, toolName: event.toolName, isError: event.isError, result: event.result }, epoch);
     } else if (event.type === 'agent_end' && event.willRetry) {
       store.recordWork(task.task_id, 'pi_agent_retry', { willRetry: true }, { epoch });
+    } else if (event.type === 'message_end') {
+      recordUserMessage(event.message, event.message?.id);
     } else if (event.type === 'entry_appended') {
       recordEvidence('pi_session_entry', { entry: event.entry }, epoch);
-      const message = event.entry?.message;
-      if (message?.role === 'user') {
-        const content = Array.isArray(message.content)
-          ? message.content.filter(block => block?.type === 'text').map(block => block.text).join(' ')
-          : String(message.content ?? '');
-        store.recordEvent(task.task_id, 'user_input', { text: content, sessionEntryId: event.entry?.id }, { epoch });
-      }
     }
   };
   const bindSession = () => { unsubscribe?.(); unsubscribe = sessionResult.session.subscribe(onSessionEvent); };
@@ -160,7 +169,7 @@ export async function createContinuityPiRuntime({
   if (typeof pi.createAgentSessionRuntime !== 'function' || typeof pi.createAgentSessionServices !== 'function' || typeof pi.createAgentSessionFromServices !== 'function') {
     throw new TypeError('Pi SDK runtime replacement APIs are required');
   }
-  const targetAgentDir = agentDir ?? resolve(cwd, '.pi', 'agent');
+  const targetAgentDir = agentDir ?? (typeof pi.getAgentDir === 'function' ? pi.getAgentDir() : join(homedir(), '.pi', 'agent'));
   const targetSessionManager = sessionManager ?? pi.SessionManager.create(cwd);
   const createRuntime = async ({ cwd: targetCwd, agentDir: targetDir, sessionManager: targetManager, sessionStartEvent }) => {
     if (resolve(targetCwd) !== resolve(cwd)) throw new ScopeError('session replacement cwd is outside the bound project');

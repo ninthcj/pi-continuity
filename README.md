@@ -2,7 +2,9 @@
 
 `pi-continuity` is a small, offline-first continuity core for long coding tasks. It stores task contracts, scoped evidence events, work records, immutable request manifests, checkpoints, and operation intents in SQLite. Large payloads can be placed in a content-addressed blob directory. The `PiAdapter` is a narrow host boundary: in `active` mode it builds and records a manifest before a provider call, and side-effect tools use an operation ledger so a completed operation is not replayed.
 
-The core has no npm Pi dependency: the adapter targets a provider-shaped interface and is tested with `FakeProvider`. A real Pi 0.85.1 extension seam is included separately below. `off` calls the provider unchanged, `record` records context without changing the caller's messages, and `active` requires a valid continuity manifest before the provider call.
+The npm SDK host uses the existing user data directory at `~/.pi/agent` for credentials, model catalogs, and sessions. Before switching installation methods, create a local backup of that directory and the project's `.pi` directory. The migration is path-compatible: existing JSONL sessions remain readable by native `npx pi`, while Continuity state stays in the project `.pi` directory.
+
+The core remains independent of Pi: the adapter targets a provider-shaped interface and is tested with `FakeProvider`. The project pins the Pi SDK for native host integration. A real Pi 0.85.1 extension seam is included separately below. `off` calls the provider unchanged, `record` records context without changing the caller's messages, and `active` requires a valid continuity manifest before the provider call.
 
 ## Run
 
@@ -24,9 +26,15 @@ For the real SDK host, install the audited Pi version in the project and run:
 
 ```powershell
 npm install @earendil-works/pi-coding-agent@0.85.1
-npx pi-continuity-pi "ship the feature" --record
+npx pi --version
+
+# Native Pi TUI with Continuity active
+$env:PI_CONTINUITY_MODE="active"
+npx pi
+
+# Host wrapper with strict provider gate
 npx pi-continuity-pi "ship the feature" --runtime
-npx pi-continuity-pi "ship the feature" --runtime --off
+px pi-continuity-pi "ship the feature" --runtime --off
 node examples/pi-faux-sdk.mjs
 ```
 

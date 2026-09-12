@@ -14,7 +14,7 @@ test('real SDK host binds the continuity runtime and records Pi entries', async 
       const listeners = [];
       return { session: {
         subscribe(fn) { listeners.push(fn); return () => listeners.splice(listeners.indexOf(fn), 1); },
-        async prompt() { modelRuntime.streamSimple({ provider: 'fake', id: 'fake' }, { systemPrompt: '', messages: [] }); listeners.forEach(fn => fn({ type: 'entry_appended', entry: { type: 'message', message: { role: 'user', content: 'x' } } })); },
+        async prompt() { modelRuntime.streamSimple({ provider: 'fake', id: 'fake' }, { systemPrompt: '', messages: [] }); const message = { role: 'user', content: 'x', timestamp: 1 }; listeners.forEach(fn => fn({ type: 'message_end', message })); listeners.forEach(fn => fn({ type: 'entry_appended', entry: { type: 'message', id: 'entry-user', message } })); },
         dispose() {},
       } };
     },

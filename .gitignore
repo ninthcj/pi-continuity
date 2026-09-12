@@ -7,3 +7,4 @@ node_modules/
 *.blobs/
 .coverage/
 .tmp-*
+.migration-backup-*/
