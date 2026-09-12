@@ -1,0 +1,1 @@
+{"name":"pi-continuity","version":"0.1.0","type":"module","description":"Auditable task continuity core and Pi adapter boundary","bin":{"pi-continuity":"./bin/pi-continuity.mjs","pi-continuity-pi":"./bin/pi-continuity-pi.mjs"},"scripts":{"test":"node --test","demo":"node ./examples/demo.mjs"},"engines":{"node":">=22"}}

@@ -1,0 +1,9 @@
+.demo/
+node_modules/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.blobs/
+.coverage/
+.tmp-*

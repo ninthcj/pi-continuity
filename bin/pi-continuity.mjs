@@ -1,0 +1,5 @@
+#!/usr/bin/env node
+import { ContinuityStore } from '../src/core.mjs';
+const [db,cmd,...rest]=process.argv.slice(2); if(!db||!cmd){console.error('usage: pi-continuity <db> create|status|manifest|inspect|resume ...');process.exit(2)}
+const mode=rest.includes('--active')?'active':rest.includes('--off')?'off':'record'; const s=new ContinuityStore(db,{mode});
+try { if(cmd==='create'){const goal=rest.filter(x=>!x.startsWith('--')).join(' '); const t=s.createTask('local','main',goal||'unnamed');console.log(JSON.stringify(t))} else {const taskId=rest.find(x=>!x.startsWith('--')); if(cmd==='status')console.log(JSON.stringify(s.status(taskId))); else if(cmd==='manifest')console.log(JSON.stringify(s.buildManifest(taskId))); else if(cmd==='inspect'){const cid=rest[rest.indexOf('--checkpoint')+1];console.log(JSON.stringify(s.inspect(cid,taskId)))} else if(cmd==='resume'){const cid=rest[rest.indexOf('--checkpoint')+1],rev=Number(rest[rest.indexOf('--revision')+1]),mode=rest.includes('--practical')?'practical':'strict';console.log(JSON.stringify(s.forkResume(cid,taskId,rev,{mode})))} else throw new Error(`unknown command ${cmd}`)}} finally{s.close()}

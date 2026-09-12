@@ -1,0 +1,96 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ContinuityStore } from '../src/core.mjs';
+
+test('Pi 0.85 extension records input and injects a manifest', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pi-ext-'));
+  const previous = process.env.PI_CONTINUITY_MODE;
+  process.env.PI_CONTINUITY_MODE = 'active';
+  const { default: extension } = await import(`../.pi/extensions/continuity.mjs?test=${Date.now()}`);
+  const handlers = new Map();
+  const commands = new Map();
+  const pi = { on(name, fn) { handlers.set(name, fn); }, registerCommand(name, spec) { commands.set(name, spec); } };
+  extension(pi);
+  const messages = [];
+  const ctx = { cwd: dir, ui: { setStatus() {}, notify(message) { messages.push(message); } } };
+  await handlers.get('session_start')({ reason: 'startup' }, ctx);
+  await handlers.get('input')({ text: 'build a widget' }, ctx);
+  const before = await handlers.get('before_agent_start')({ prompt: 'continue', systemPrompt: 'base' }, ctx);
+  assert.equal(before.message.customType, 'continuity');
+  assert.equal(commands.has('continuity'), true);
+  const store = new ContinuityStore(join(dir, '.pi', 'continuity.db'), { mode: 'active' });
+  const task = store.row('SELECT task_id FROM tasks').task_id;
+  assert.ok(store.events(task).some(event => event.source === 'user_input'));
+  assert.ok(store.events(task).some(event => event.source === 'model_request'));
+  await handlers.get('session_shutdown')({}, ctx);
+  store.close();
+  if (previous === undefined) delete process.env.PI_CONTINUITY_MODE; else process.env.PI_CONTINUITY_MODE = previous;
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('Pi extension record mode preserves native agent input', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pi-ext-record-'));
+  const previous = process.env.PI_CONTINUITY_MODE;
+  process.env.PI_CONTINUITY_MODE = 'record';
+  const { default: extension } = await import(`../.pi/extensions/continuity.mjs?record-test=${Date.now()}`);
+  const handlers = new Map();
+  const pi = { on(name, fn) { handlers.set(name, fn); }, registerCommand() {} };
+  extension(pi);
+  const ctx = { cwd: dir, ui: { setStatus() {}, notify() {} } };
+  await handlers.get('input')({ text: 'record this' }, ctx);
+  const before = await handlers.get('before_agent_start')({ prompt: 'continue' }, ctx);
+  assert.equal(before, undefined);
+  await handlers.get('session_shutdown')({}, ctx);
+  if (previous === undefined) delete process.env.PI_CONTINUITY_MODE; else process.env.PI_CONTINUITY_MODE = previous;
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('Pi continuity command exposes read-only diff and host-confirmed correction', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pi-ext-ui-'));
+  const previous = process.env.PI_CONTINUITY_MODE;
+  process.env.PI_CONTINUITY_MODE = 'active';
+  const { default: extension } = await import(`../.pi/extensions/continuity.mjs?ui-test=${Date.now()}`);
+  const handlers = new Map(); const commands = new Map(); const messages = [];
+  const pi = { on(name, fn) { handlers.set(name, fn); }, registerCommand(name, spec) { commands.set(name, spec); } };
+  extension(pi);
+  const ctx = { cwd: dir, ui: { setStatus() {}, notify(message) { messages.push(message); }, async confirm() { return true; } } };
+  await handlers.get('input')({ text: 'task' }, ctx);
+  const db = join(dir, '.pi', 'continuity.db');
+  const store = new ContinuityStore(db, { mode: 'active' });
+  const task = store.row('SELECT task_id FROM tasks').task_id;
+  const cid = store.createCheckpoint(task, { expectedRevision: 1, epoch: 1, workspace: { root: dir, files: [] } });
+  await commands.get('continuity').handler(`diff ${cid}`, ctx);
+  await commands.get('continuity').handler('correct {"constraints":["confirmed"]}', ctx);
+  assert.match(messages.join('\n'), /match/);
+  assert.match(messages.join('\n'), /revision 2 confirmed/);
+  store.close(); await handlers.get('session_shutdown')({}, ctx);
+  if (previous === undefined) delete process.env.PI_CONTINUITY_MODE; else process.env.PI_CONTINUITY_MODE = previous;
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('Pi tool hook blocks a restarted unknown side effect operation', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pi-ext-tool-'));
+  const previous = process.env.PI_CONTINUITY_MODE;
+  process.env.PI_CONTINUITY_MODE = 'active';
+  const { default: extension } = await import(`../.pi/extensions/continuity.mjs?tool-test=${Date.now()}`);
+  const handlers = new Map();
+  const makePi = () => ({ on(name, fn) { handlers.set(name, fn); }, registerCommand() {} });
+  extension(makePi());
+  const ctx = { cwd: dir, ui: { setStatus() {}, notify() {} } };
+  await handlers.get('input')({ text: 'tool task' }, ctx);
+  const call = { toolCallId: 'same-call', toolName: 'write', input: { path: 'x', content: 'x' } };
+  assert.equal(await handlers.get('tool_call')(call, ctx), undefined);
+  await handlers.get('session_shutdown')({}, ctx);
+  handlers.clear();
+  extension(makePi());
+  await handlers.get('session_start')({ reason: 'resume' }, ctx);
+  const blocked = await handlers.get('tool_call')(call, ctx);
+  assert.equal(blocked.block, true);
+  assert.match(blocked.reason, /unknown/);
+  await handlers.get('session_shutdown')({}, ctx);
+  if (previous === undefined) delete process.env.PI_CONTINUITY_MODE; else process.env.PI_CONTINUITY_MODE = previous;
+  rmSync(dir, { recursive: true, force: true });
+});
