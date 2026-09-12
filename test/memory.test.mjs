@@ -159,7 +159,7 @@ test('compression extracts key claims and can expand omitted history', () => {
   const x = setup();
   x.store.recordEvent(x.task.task_id, 'model_response', { text: 'Decision: use SQLite\nNext step: add an index' });
   for (let i = 0; i < 12; i++) x.store.recordEvent(x.task.task_id, 'tool_result', { output: `verbose result ${i} ${'x'.repeat(180)}` });
-  const view = x.store.compressContext(x.task.task_id, { budget: 700, recent: 2, keepFirst: 1 });
+  const view = x.store.compressContext(x.task.task_id, { budget: 700 });
   assert.equal(view.format, 'pi-continuity-compression-v1');
   assert.ok(view.extracted.some(claim => claim.predicate === 'decision'));
   assert.ok(view.extracted.some(claim => claim.predicate === 'next_step'));
@@ -170,5 +170,16 @@ test('compression extracts key claims and can expand omitted history', () => {
   const expanded = x.store.expandCompressionView(view.viewId, x.task.task_id, { includeOmitted: true });
   assert.equal(expanded.events.length, view.sourceEventIds.length);
   assert.ok(expanded.memories.some(memory => memory.predicate === 'decision'));
+  close(x);
+});
+
+test('compression preserves full extracted claims when no budget is imposed', () => {
+  const x = setup();
+  const decision = `Decision: ${'retain this architectural decision '.repeat(80)}`;
+  x.store.recordEvent(x.task.task_id, 'model_response', { text: decision });
+  const view = x.store.compressContext(x.task.task_id, { budget: 0 });
+  const claim = view.extracted.find(item => item.predicate === 'decision');
+  assert.ok(claim.value.length > 600);
+  assert.equal(view.omittedEventIds.length, 0);
   close(x);
 });

@@ -80,8 +80,8 @@ export default function continuity(pi) {
     const task = ensure(ctx);
     if (hostOnly || !task || mode !== "active") return;
     const preparation = event?.preparation ?? {};
-    const view = store.compressContext(task.task_id, { epoch: task.epoch, budget, recent: 12, keepFirst: 1 });
-    return { compaction: { summary: renderCompression(view), firstKeptEntryId: preparation.firstKeptEntryId, tokensBefore: preparation.tokensBefore ?? view.tokensBefore, details: { viewId: view.viewId, strategy: 'deterministic-extract-v1', sourceEventIds: view.sourceEventIds, omittedEventIds: view.omittedEventIds } } };
+    const view = store.compressContext(task.task_id, { epoch: task.epoch, budget });
+    return { compaction: { summary: renderCompression(view), firstKeptEntryId: preparation.firstKeptEntryId, tokensBefore: preparation.tokensBefore ?? view.tokensBefore, details: { viewId: view.viewId, strategy: 'deterministic-extract-v3', sourceEventIds: view.sourceEventIds, omittedEventIds: view.omittedEventIds } } };
   });
   // This is the real Pi pre-agent integration point. The injected message is
   // traceable to an immutable manifest; UI-only status never enters context.
