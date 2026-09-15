@@ -1,0 +1,113 @@
+{
+  "date": "2026-09-15T11:30:47.695Z",
+  "node": "v24.19.0",
+  "platform": "win32",
+  "budget": 1200,
+  "results": [
+    {
+      "events": 64,
+      "runs": [
+        {
+          "run": 1,
+          "milliseconds": 52.9,
+          "tokenCounterCalls": 10,
+          "tokenizedCharacters": 152752,
+          "tokensAfter": 1181,
+          "metrics": {
+            "requiredInstructions": 1,
+            "retainedInstructions": 1,
+            "omittedEvents": 58,
+            "fullMeasurements": 10,
+            "decodedEvents": 70,
+            "extractedEvents": 67
+          }
+        },
+        {
+          "run": 2,
+          "milliseconds": 28.4,
+          "tokenCounterCalls": 10,
+          "tokenizedCharacters": 155279,
+          "tokensAfter": 1182,
+          "metrics": {
+            "requiredInstructions": 1,
+            "retainedInstructions": 1,
+            "omittedEvents": 61,
+            "fullMeasurements": 10,
+            "decodedEvents": 3,
+            "extractedEvents": 0
+          }
+        }
+      ]
+    },
+    {
+      "events": 256,
+      "runs": [
+        {
+          "run": 1,
+          "milliseconds": 95.7,
+          "tokenCounterCalls": 13,
+          "tokenizedCharacters": 539785,
+          "tokensAfter": 1191,
+          "metrics": {
+            "requiredInstructions": 1,
+            "retainedInstructions": 1,
+            "omittedEvents": 250,
+            "fullMeasurements": 13,
+            "decodedEvents": 262,
+            "extractedEvents": 259
+          }
+        },
+        {
+          "run": 2,
+          "milliseconds": 60.6,
+          "tokenCounterCalls": 13,
+          "tokenizedCharacters": 542316,
+          "tokensAfter": 1198,
+          "metrics": {
+            "requiredInstructions": 1,
+            "retainedInstructions": 1,
+            "omittedEvents": 253,
+            "fullMeasurements": 13,
+            "decodedEvents": 3,
+            "extractedEvents": 0
+          }
+        }
+      ]
+    },
+    {
+      "events": 1024,
+      "runs": [
+        {
+          "run": 1,
+          "milliseconds": 271.8,
+          "tokenCounterCalls": 14,
+          "tokenizedCharacters": 1958687,
+          "tokensAfter": 1193,
+          "metrics": {
+            "requiredInstructions": 1,
+            "retainedInstructions": 1,
+            "omittedEvents": 1018,
+            "fullMeasurements": 14,
+            "decodedEvents": 1030,
+            "extractedEvents": 1027
+          }
+        },
+        {
+          "run": 2,
+          "milliseconds": 163.5,
+          "tokenCounterCalls": 14,
+          "tokenizedCharacters": 1961219,
+          "tokensAfter": 1196,
+          "metrics": {
+            "requiredInstructions": 1,
+            "retainedInstructions": 1,
+            "omittedEvents": 1021,
+            "fullMeasurements": 14,
+            "decodedEvents": 3,
+            "extractedEvents": 0
+          }
+        }
+      ]
+    }
+  ]
+}

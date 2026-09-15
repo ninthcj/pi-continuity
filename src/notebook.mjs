@@ -50,6 +50,10 @@ export class Notebook {
       CREATE TABLE IF NOT EXISTS notebook_cursors(
         task_id TEXT NOT NULL REFERENCES tasks(task_id), epoch INTEGER NOT NULL,
         extractor TEXT NOT NULL, last_seq INTEGER NOT NULL, PRIMARY KEY(task_id,epoch,extractor));
+      CREATE TABLE IF NOT EXISTS notebook_observer_progress(
+        task_id TEXT NOT NULL REFERENCES tasks(task_id), epoch INTEGER NOT NULL,
+        event_id TEXT NOT NULL REFERENCES events(event_id), offset INTEGER NOT NULL,
+        total_chars INTEGER NOT NULL, PRIMARY KEY(task_id,epoch));
     `);
   }
 
@@ -66,8 +70,8 @@ export class Notebook {
 
   resumeContext(taskId) {
     const task = this.store.getTask(taskId);
-    const event = this.store.row("SELECT payload FROM events WHERE task_id=? AND epoch=? AND source='resume' ORDER BY seq DESC LIMIT 1", taskId, task.epoch);
-    return event ? JSON.parse(event.payload) : {};
+    const event = this.store.row("SELECT event_id FROM events WHERE task_id=? AND epoch=? AND source='resume' ORDER BY seq DESC LIMIT 1", taskId, task.epoch);
+    return event ? this.source(taskId,event.event_id).payload : {};
   }
 
   entry(taskId, noteId) {
@@ -156,34 +160,78 @@ export class Notebook {
     return this.read(taskId);
   }
 
-  /** Optional semantic observer. Its output is always proposed, validated, and atomic. */
+  observerState(taskId) {
+    const task=this.store.getTask(taskId);
+    const cursor=this.store.row("SELECT last_seq FROM notebook_cursors WHERE task_id=? AND epoch=? AND extractor='observer-v1'",taskId,task.epoch)?.last_seq??0;
+    const progress=this.store.row('SELECT * FROM notebook_observer_progress WHERE task_id=? AND epoch=?',taskId,task.epoch)??null;
+    const inherited=(this.resumeContext(taskId).observerPending??[]).map(item=>{
+      const row=this.store.row('SELECT event_id,seq,source FROM events WHERE task_id=? AND event_id=?',taskId,item.eventId);
+      if(!row)throw new this.errors.ScopeError('observer recovery source is missing');
+      return {...row,offset:item.offset??0};
+    }).filter(row=>row.seq>cursor);
+    const own=this.store.db.prepare("SELECT event_id,seq,source FROM events WHERE task_id=? AND epoch=? AND seq>? AND source IN ('user_input','model_response','tool_result','model_error','pi_session_entry') ORDER BY seq").all(taskId,task.epoch,cursor).map(row=>({...row,offset:0}));
+    const rows=[...new Map([...inherited,...own].map(row=>[row.event_id,row])).values()].sort((a,b)=>a.seq-b.seq);
+    if(progress){const row=rows.find(row=>row.event_id===progress.event_id);if(!row)throw new this.errors.GateError('observer cursor and fragment progress disagree');row.offset=progress.offset;}
+    return {cursor,progress,rows};
+  }
+
+  checkpointObserverState(checkpoint, importEventIds=[]) {
+    const allowed=new Set(['user_input','model_response','tool_result','model_error','pi_session_entry']);
+    const saved=checkpoint.payload.observerPending??this.store.checkpointEvents(checkpoint.checkpoint_id,checkpoint.task_id).filter(event=>allowed.has(event.source)).map(event=>({eventId:event.event_id,offset:0}));
+    const items=new Map(saved.map(item=>[item.eventId,item]));
+    for(const eventId of importEventIds){const event=this.source(checkpoint.task_id,eventId);if(allowed.has(event.source)&&!items.has(eventId))items.set(eventId,{eventId,offset:0});}
+    return [...items.values()];
+  }
+
+  /** Optional semantic observer. A successful partial event commits its offset with its notes. */
   async observe(taskId, observer, { maxEvents = 32, signal } = {}) {
     if (typeof observer !== 'function') throw new TypeError('notebook observer must be a function');
+    if (!Number.isSafeInteger(maxEvents) || maxEvents < 1) throw new TypeError('maxEvents must be a positive integer');
     this.refresh(taskId);
     const task = this.store.getTask(taskId);
-    const cursor = this.store.row("SELECT last_seq FROM notebook_cursors WHERE task_id=? AND epoch=? AND extractor='observer-v1'", taskId, task.epoch)?.last_seq ?? 0;
-    const rows = this.store.db.prepare("SELECT event_id,seq FROM events WHERE task_id=? AND epoch=? AND seq>? AND source IN ('user_input','model_response','tool_result','model_error','pi_session_entry') ORDER BY seq LIMIT ?").all(taskId, task.epoch, cursor, Math.max(1, Math.min(128, maxEvents)));
-    if (!rows.length) return this.read(taskId);
+    const state=this.observerState(taskId),{cursor,progress}=state;
+    const rows=state.rows.slice(0,Math.min(128,maxEvents));
+    if(!rows.length)return this.read(taskId);
     const heads = this.heads(taskId);
     const existing = new Map(heads.map(note => [note.entry_key, note.note_id]));
     const events = rows.map(row => this.source(taskId, row.event_id));
-    const result = await observer({ task: { goal: task.goal, constraints: task.constraints, acceptance: task.acceptance }, notes: heads, events, signal });
+    const input = { task: { goal: task.goal, constraints: task.constraints, acceptance: task.acceptance }, notes: heads, events, progress, offsets:Object.fromEntries(rows.map(row=>[row.event_id,row.offset])), signal };
+    const prepared = typeof observer.prepare === 'function' ? observer.prepare(input) : { ...input, ranges: events.map(event => ({ eventId: event.event_id, from: 0, to: JSON.stringify(event.payload).length, totalChars: JSON.stringify(event.payload).length })) };
+    if (!Array.isArray(prepared.ranges) || !prepared.ranges.length || prepared.ranges.length > rows.length) throw new this.errors.GateError('observer must process a nonempty source prefix');
+    for (const [index, range] of prepared.ranges.entries()) {
+      const expectedOffset = typeof observer.prepare === 'function' ? rows[index].offset : 0;
+      const size = JSON.stringify(events[index].payload).length;
+      if (range.eventId !== rows[index].event_id || prepared.events[index]?.event_id !== range.eventId || range.from !== expectedOffset || range.totalChars !== size || !Number.isSafeInteger(range.to) || range.to <= range.from || range.to > size || range.to < size && index !== prepared.ranges.length - 1) {
+        throw new this.errors.GateError('observer source ranges must be contiguous and cannot skip evidence');
+      }
+    }
+    const result = await observer(prepared);
     if (signal?.aborted) throw new this.errors.GateError('notebook observation cancelled');
     const current = this.store.getTask(taskId);
     if (current.epoch !== task.epoch || current.revision !== task.revision) throw new this.errors.StaleRevision('task changed while observing');
     if (!Array.isArray(result?.entries) || result.entries.length > 64) throw new this.errors.ContinuityError('observer must return at most 64 entries');
-    const allowed = new Set(events.map(event => event.event_id));
+    const allowed = new Set(prepared.ranges.map(range => range.eventId));
     const keys = new Set();
     this.store.tx(() => {
-      const currentCursor=this.store.row("SELECT last_seq FROM notebook_cursors WHERE task_id=? AND epoch=? AND extractor='observer-v1'",taskId,task.epoch)?.last_seq??0;
-      if(currentCursor!==cursor)throw new this.errors.StaleRevision('observer cursor advanced concurrently');
+      const currentCursor = this.store.row("SELECT last_seq FROM notebook_cursors WHERE task_id=? AND epoch=? AND extractor='observer-v1'",taskId,task.epoch)?.last_seq??0;
+      const currentProgress = this.store.row('SELECT * FROM notebook_observer_progress WHERE task_id=? AND epoch=?',taskId,task.epoch)??null;
+      if(currentCursor!==cursor || JSON.stringify(currentProgress)!==JSON.stringify(progress)) throw new this.errors.StaleRevision('observer cursor advanced concurrently');
       for (const item of result.entries) {
-        if (keys.has(item.key) || !item.evidenceIds?.length || item.evidenceIds.some(id => !allowed.has(id))) throw new this.errors.ScopeError('observer has duplicate keys or unsupported evidence');
+        if (!item || typeof item !== 'object') throw new this.errors.ContinuityError('observer entries must be objects');
+        if (keys.has(item.key)) throw new this.errors.ScopeError('observer has duplicate entry keys');
+        if (!Array.isArray(item.evidenceIds) || !item.evidenceIds.length || item.evidenceIds.some(id => !allowed.has(id))) throw new this.errors.ScopeError('observer evidence must reference the current source batch');
         if (item.status && item.status !== 'proposed') throw new this.errors.GateError('observer cannot confirm a note');
         keys.add(item.key);
         this.apply(taskId, task.epoch, { key: item.key, category: item.category, text: item.text, evidenceIds: item.evidenceIds, retire: item.retire === true, expectedNoteId: existing.get(item.key) ?? null, status: 'proposed', origin: 'observer' });
       }
-      this.store.db.prepare("INSERT INTO notebook_cursors VALUES(?,?,'observer-v1',?) ON CONFLICT(task_id,epoch,extractor) DO UPDATE SET last_seq=excluded.last_seq").run(taskId, task.epoch, rows.at(-1).seq);
+      let lastSeq=cursor, partial;
+      for(const [index,range] of prepared.ranges.entries()) {
+        if(range.to===range.totalChars)lastSeq=rows[index].seq;
+        else partial=range;
+      }
+      this.store.db.prepare("INSERT INTO notebook_cursors VALUES(?,?,'observer-v1',?) ON CONFLICT(task_id,epoch,extractor) DO UPDATE SET last_seq=excluded.last_seq").run(taskId, task.epoch, lastSeq);
+      if(partial) this.store.db.prepare('INSERT INTO notebook_observer_progress VALUES(?,?,?,?,?) ON CONFLICT(task_id,epoch) DO UPDATE SET event_id=excluded.event_id,offset=excluded.offset,total_chars=excluded.total_chars').run(taskId,task.epoch,partial.eventId,partial.to,partial.totalChars);
+      else this.store.db.prepare('DELETE FROM notebook_observer_progress WHERE task_id=? AND epoch=?').run(taskId,task.epoch);
     });
     return this.read(taskId);
   }

@@ -1,6 +1,6 @@
 {
   "name": "pi-continuity",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Auditable task continuity core and Pi adapter boundary",
   "bin": {
@@ -10,9 +10,11 @@
   "scripts": {
     "test": "node --test \"test/**/*.mjs\" \"test/**/*.ts\"",
     "demo": "node ./examples/demo.mjs",
-    "test:notebook": "node --test test/notebook.test.mjs",
+    "test:notebook": "node --test test/notebook.test.mjs test/observer-progress.test.mjs",
     "build": "node scripts/build-package.mjs",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "benchmark:context": "node scripts/benchmark-context.mjs",
+    "evaluate:notebook": "node scripts/evaluate-notebook.mjs"
   },
   "engines": {
     "node": ">=22.19.0"
@@ -38,7 +40,10 @@
     "docs/continuity/AUDIT.md",
     "README.zh-CN.md",
     "LICENSE",
-    "docs/continuity/COMPRESSION_RESEARCH.md"
+    "docs/continuity/COMPRESSION_RESEARCH.md",
+    "docs/continuity/SPEC.md",
+    "docs/continuity/benchmarks",
+    "docs/continuity/evaluations"
   ],
   "license": "MIT",
   "author": "ninthcj",

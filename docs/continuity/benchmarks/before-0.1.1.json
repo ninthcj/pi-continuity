@@ -1,0 +1,66 @@
+{
+  "date": "2026-09-15T11:16:05.201Z",
+  "node": "v24.19.0",
+  "platform": "win32",
+  "budget": 1200,
+  "results": [
+    {
+      "events": 64,
+      "runs": [
+        {
+          "run": 1,
+          "milliseconds": 233.4,
+          "tokenCounterCalls": 64,
+          "tokenizedCharacters": 2267275,
+          "tokensAfter": 1185,
+          "metrics": {
+            "requiredInstructions": 1,
+            "retainedInstructions": 1,
+            "omittedEvents": 58
+          }
+        },
+        {
+          "run": 2,
+          "milliseconds": 216.8,
+          "tokenCounterCalls": 67,
+          "tokenizedCharacters": 2454507,
+          "tokensAfter": 1189,
+          "metrics": {
+            "requiredInstructions": 1,
+            "retainedInstructions": 1,
+            "omittedEvents": 61
+          }
+        }
+      ]
+    },
+    {
+      "events": 256,
+      "runs": [
+        {
+          "run": 1,
+          "milliseconds": 2466.1,
+          "tokenCounterCalls": 256,
+          "tokenizedCharacters": 32173730,
+          "tokensAfter": 1170,
+          "metrics": {
+            "requiredInstructions": 1,
+            "retainedInstructions": 1,
+            "omittedEvents": 250
+          }
+        },
+        {
+          "run": 2,
+          "milliseconds": 2456,
+          "tokenCounterCalls": 259,
+          "tokenizedCharacters": 32902298,
+          "tokensAfter": 1169,
+          "metrics": {
+            "requiredInstructions": 1,
+            "retainedInstructions": 1,
+            "omittedEvents": 253
+          }
+        }
+      ]
+    }
+  ]
+}

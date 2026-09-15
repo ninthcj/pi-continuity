@@ -1,4 +1,5 @@
 import { Notebook } from './notebook.mjs';
+import { MemoryLedger } from './memory-ledger.mjs';
 import { ContextEngine } from './context-engine.mjs';
 import { countTextTokens } from './context-budget.mjs';
 import { DatabaseSync } from 'node:sqlite';
@@ -62,6 +63,7 @@ export class ContinuityStore {
     if(schema!=='4') throw new ContinuityError(`unsupported continuity schema ${schema}`);
     const errors={ContinuityError,StaleRevision,EpochMismatch,ScopeError,GateError,CheckpointError};
     this.notebook=new Notebook(this,errors);
+    this.memory=new MemoryLedger(this,errors);
     this.contextEngine=new ContextEngine(this,errors);
     this.db.exec("UPDATE operations SET status='unknown', updated_at=strftime('%s','now') WHERE status='intent'");
   }
@@ -69,7 +71,13 @@ export class ContinuityStore {
   row(sql,...args){return this.db.prepare(sql).get(...args)}
   setNativeSnapshotMode(mode){if(!['portable-cas','auto','native'].includes(mode))throw new ContinuityError('native snapshot mode must be portable-cas, auto, or native');this.db.prepare("INSERT INTO meta(key,value) VALUES('native_snapshot_mode',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(mode);return mode}
   nativeSnapshotMode(){return this.row("SELECT value FROM meta WHERE key='native_snapshot_mode'")?.value??'portable-cas'}
-  tx(fn){this.db.exec('BEGIN IMMEDIATE');try{const result=fn();this.db.exec('COMMIT');return result}catch(error){try{this.db.exec('ROLLBACK')}catch{}throw error}}
+  tx(fn){
+    this.transactionSequence=(this.transactionSequence??0)+1;
+    const nested=this.db.isTransaction,savepoint='continuity_'+this.transactionSequence;
+    this.db.exec(nested?'SAVEPOINT '+savepoint:'BEGIN IMMEDIATE');
+    try{const result=fn();this.db.exec(nested?'RELEASE SAVEPOINT '+savepoint:'COMMIT');return result}
+    catch(error){try{if(nested){this.db.exec('ROLLBACK TO SAVEPOINT '+savepoint);this.db.exec('RELEASE SAVEPOINT '+savepoint)}else this.db.exec('ROLLBACK')}catch{}throw error}
+  }
   getTask(taskId, projectId, branch){const r=this.row('SELECT * FROM tasks WHERE task_id=?',taskId); if(!r || (projectId!==undefined&&r.project_id!==projectId)||(branch!==undefined&&r.branch!==branch)) throw new ScopeError('task scope mismatch'); return {...r,acceptance:JSON.parse(r.acceptance),constraints:JSON.parse(r.constraints_json)} }
   createTask(projectId,branch,goal,{acceptance=[],constraints=[],taskId=id('task')}={}){this.tx(()=>{this.db.prepare('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?)').run(taskId,projectId,branch,1,1,goal,JSON.stringify(acceptance),JSON.stringify(constraints),now()); this.db.prepare('INSERT INTO runtime_states VALUES(?,?,?,?)').run(taskId,'RUNNING',null,now()); this.recordEvent(taskId,'user_input',{goal,acceptance,constraints},{epoch:1});}); return this.getTask(taskId)}
   runtimeState(taskId){this.getTask(taskId);return this.row('SELECT * FROM runtime_states WHERE task_id=?',taskId)}
@@ -110,38 +118,54 @@ export class ContinuityStore {
   exportNotebook(taskId){this.refreshNotebook(taskId);return this.notebook.markdown(taskId)}
   readEvent(taskId,eventId){return this.notebook.source(taskId,eventId)}
   normalizeMemoryClaim({scope='task',subject,predicate,value}){if(subject===undefined||predicate===undefined||value===undefined)throw new ContinuityError('memory claims require subject, predicate, and value');const normText=v=>String(v).trim().toLocaleLowerCase().replace(/\s+/g,' '),normValue=v=>Array.isArray(v)?v.map(normValue):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b)).map(([k,x])=>[normText(k),normValue(x)])):typeof v==='string'?normText(v):v;const normalized={scope:normText(scope),subject:normText(subject),predicate:normText(predicate),value:normValue(value)},conflictKey=createHash('sha256').update(JSON.stringify({scope:normalized.scope,subject:normalized.subject,predicate:normalized.predicate})).digest('hex'),fingerprint=createHash('sha256').update(JSON.stringify(normalized)).digest('hex');return {...normalized,conflictKey,fingerprint}}
-  memoryClaim(memoryId,taskId){const r=this.row('SELECT * FROM memory_claims WHERE memory_id=?',memoryId);if(!r||r.task_id!==taskId)throw new ScopeError('memory claim scope mismatch');return {...r,value:JSON.parse(r.value_json),evidenceIds:JSON.parse(r.evidence_ids_json)}}
-  readMemory(memoryId,taskId){return this.memoryClaim(memoryId,taskId)}
-memoryClaims(taskId,{includeCandidates=false}={}){const t=this.getTask(taskId),filter=includeCandidates?'':' AND origin=\'direct\'';return this.db.prepare(`SELECT * FROM memory_claims WHERE task_id=? AND project_id=? AND branch=?${filter} ORDER BY created_at, memory_id`).all(taskId,t.project_id,t.branch).map(r=>({...r,value:JSON.parse(r.value_json),evidenceIds:JSON.parse(r.evidence_ids_json)}))}
-recallMemory(taskId,query,{limit=8,scope,includeCandidates=false}={}){this.getTask(taskId);const terms=String(query??'').trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);if(!terms.length)return [];const claims=this.memoryClaims(taskId,{includeCandidates}).filter(m=>!scope||m.scope===scope);return claims.map(memory=>{const text=`${memory.scope} ${memory.subject} ${memory.predicate} ${JSON.stringify(memory.value)}`.toLocaleLowerCase();const matched=terms.filter(term=>text.includes(term));return {...memory,score:matched.length/terms.length,preview:`${memory.subject} ${memory.predicate}: ${JSON.stringify(memory.value)}`.slice(0,500)}}).filter(memory=>memory.score>0).sort((a,b)=>b.score-a.score||a.memory_id.localeCompare(b.memory_id)).slice(0,Math.max(1,Math.min(64,Number(limit)||8))).map(({value_json,evidence_ids_json,...memory})=>memory)}
-  recordMemoryClaim(taskId,epoch,{scope='task',subject,predicate,value,evidenceIds=[],status='confirmed',sourceEvent,origin='direct'}={}) {
-    const t=this.getTask(taskId); epoch??=t.epoch;
-    if(!['proposed','confirmed'].includes(status)) throw new ContinuityError('new memory claims must be proposed or confirmed');
-    if(!['direct','compression'].includes(origin)) throw new ContinuityError('memory claim origin must be direct or compression');
-    const normalized=this.normalizeMemoryClaim({scope,subject,predicate,value}),existing=this.row('SELECT * FROM memory_claims WHERE task_id=? AND fingerprint=?',taskId,normalized.fingerprint);
-    if(existing){
-      const mergedEvidence=[...new Set([...JSON.parse(existing.evidence_ids_json),...evidenceIds])];
-      if(origin==='direct'&&existing.origin==='compression') { const nextStatus=status==='confirmed'?'confirmed':existing.status; this.db.prepare('UPDATE memory_claims SET origin=\'direct\',status=?,evidence_ids_json=? WHERE memory_id=? AND task_id=?').run(nextStatus,JSON.stringify(mergedEvidence),existing.memory_id,taskId); this.recordEvent(taskId,'memory_promoted',{memoryId:existing.memory_id,evidenceIds,sourceEvent},{epoch:t.epoch}); return {kind:'promoted',memory:this.memoryClaim(existing.memory_id,taskId)}; }
-      if(status==='confirmed'&&existing.status==='proposed'){this.db.prepare('UPDATE memory_claims SET status=\'confirmed\',evidence_ids_json=? WHERE memory_id=? AND task_id=? AND status=\'proposed\'').run(JSON.stringify(mergedEvidence),existing.memory_id,taskId);this.recordEvent(taskId,'memory_confirmed',{memoryId:existing.memory_id,confirmedProposal:true,evidenceIds,sourceEvent},{epoch:t.epoch});return {kind:'confirmed',memory:this.memoryClaim(existing.memory_id,taskId)}}
-      this.recordEvent(taskId,'memory_duplicate',{memoryId:existing.memory_id,duplicateOf:existing.memory_id,subject:normalized.subject,predicate:normalized.predicate,origin},{epoch:t.epoch});return {kind:'duplicate',memory:this.memoryClaim(existing.memory_id,taskId)}
-    }
-    const memoryId=id('mem'); this.db.prepare('INSERT INTO memory_claims(memory_id,task_id,project_id,branch,epoch,revision,scope,subject,predicate,value_json,conflict_key,fingerprint,status,origin,evidence_ids_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(memoryId,taskId,t.project_id,t.branch,epoch,t.revision,normalized.scope,normalized.subject,normalized.predicate,JSON.stringify(normalized.value),normalized.conflictKey,normalized.fingerprint,status,origin,JSON.stringify(evidenceIds),now());
-    const rivals=this.db.prepare('SELECT memory_id FROM memory_claims WHERE task_id=? AND conflict_key=? AND memory_id<>?').all(taskId,normalized.conflictKey,memoryId),conflicts=[];
-    for(const rival of rivals){const [left,right]=[memoryId,rival.memory_id].sort();const already=this.row('SELECT conflict_id FROM memory_conflicts WHERE task_id=? AND left_memory_id=? AND right_memory_id=?',taskId,left,right);if(!already){const conflictId=id('conflict');this.db.prepare('INSERT INTO memory_conflicts VALUES(?,?,?,?,?,?,?,?)').run(conflictId,taskId,t.project_id,t.branch,normalized.conflictKey,left,right,now());conflicts.push(conflictId)}}
-    this.recordEvent(taskId,'memory_'+status,{memoryId,subject:normalized.subject,predicate:normalized.predicate,value:normalized.value,evidenceIds,conflicts,sourceEvent,origin},{epoch:t.epoch});
-    return {kind:conflicts.length?'conflict':'new',memory:this.memoryClaim(memoryId,taskId),conflicts:this.memoryConflicts(taskId).filter(c=>c.left_memory_id===memoryId||c.right_memory_id===memoryId)};
+  memoryClaim(memoryId,taskId){return this.memory.read(memoryId,taskId)}
+  readMemory(memoryId,taskId){return this.memory.read(memoryId,taskId)}
+  memoryClaims(taskId,options={}){return this.memory.list(taskId,options)}
+  recallMemory(taskId,query,{limit=8,scope,includeCandidates=false,includeHistory=false}={}){
+    this.getTask(taskId);
+    const terms=String(query??'').trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    if(!terms.length)return [];
+    return this.memoryClaims(taskId,{includeCandidates,includeHistory}).filter(memory=>!scope||memory.scope===scope).map(memory=>{
+      const text=[memory.scope,memory.subject,memory.predicate,JSON.stringify(memory.value)].join(' ').toLocaleLowerCase();
+      return {...memory,score:terms.filter(term=>text.includes(term)).length/terms.length,preview:text.slice(0,500)};
+    }).filter(memory=>memory.score>0).sort((a,b)=>b.score-a.score||a.memory_id.localeCompare(b.memory_id)).slice(0,Math.max(1,Math.min(64,Number(limit)||8)));
   }
-  memoryConflicts(taskId){const t=this.getTask(taskId);return this.db.prepare('SELECT * FROM memory_conflicts WHERE task_id=? AND project_id=? AND branch=? ORDER BY created_at, conflict_id').all(taskId,t.project_id,t.branch).map(r=>({...r,left:this.memoryClaim(r.left_memory_id,taskId),right:this.memoryClaim(r.right_memory_id,taskId)}))}
-  memorySnapshot(snapshotId,taskId){const r=this.row('SELECT * FROM memory_snapshots WHERE snapshot_id=?',snapshotId);if(!r||r.task_id!==taskId)throw new ScopeError('memory snapshot scope mismatch');const items=this.db.prepare('SELECT memory_id FROM memory_snapshot_items WHERE snapshot_id=? ORDER BY position').all(snapshotId).map(x=>this.memoryClaim(x.memory_id,taskId));return {...r,parentIds:JSON.parse(r.parent_ids_json),memories:items}}
-  createMemorySnapshot(taskId,{epoch,revision,parentIds=[],message='',author='host',memoryIds,includeCandidates=false}={}){const t=this.getTask(taskId);epoch??=t.epoch;revision??=t.revision;for(const parentId of parentIds){const parent=this.memorySnapshot(parentId,taskId);if(!parent)throw new ScopeError('memory snapshot parent scope mismatch')}const ids=[...(memoryIds??this.memoryClaims(taskId,{includeCandidates}).map(x=>x.memory_id))].sort();for(const memoryId of ids)this.memoryClaim(memoryId,taskId);const treeHash=createHash('sha256').update(JSON.stringify(ids)).digest('hex'),snapshotId=id('msnap');this.tx(()=>{this.db.prepare('INSERT INTO memory_snapshots VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(snapshotId,taskId,t.project_id,t.branch,epoch,revision,JSON.stringify(parentIds),treeHash,String(message),String(author),now());ids.forEach((memoryId,position)=>this.db.prepare('INSERT INTO memory_snapshot_items VALUES(?,?,?)').run(snapshotId,memoryId,position));this.recordEvent(taskId,'memory_snapshot',{snapshotId,parentIds,treeHash,message,author},{epoch:t.epoch})});return this.memorySnapshot(snapshotId,taskId)}
-  forkMemorySnapshot(snapshotId,taskId,options={}){const source=this.memorySnapshot(snapshotId,taskId),t=this.getTask(taskId);return this.createMemorySnapshot(taskId,{epoch:t.epoch,revision:t.revision,parentIds:[source.snapshot_id],memoryIds:source.memories.map(x=>x.memory_id),...options})}
+  recordMemoryClaim(taskId,epoch,change={}){return this.memory.record(taskId,epoch,change)}
+  memoryConflicts(taskId,options={}){return this.memory.conflicts(taskId,options)}
+  memorySnapshot(snapshotId,taskId){return this.memory.snapshot(snapshotId,taskId)}
+  createMemorySnapshot(taskId,options={}){return this.memory.createSnapshot(taskId,options)}
+  forkMemorySnapshot(snapshotId,taskId,options={}){
+    const snapshot=this.memorySnapshot(snapshotId,taskId);
+    return this.createMemorySnapshot(taskId,{parentIds:[snapshot.snapshot_id],...options,versionIds:options.versionIds??(options.memoryIds?undefined:snapshot.memories.map(memory=>memory.version_id))});
+  }
   memorySnapshotAncestors(snapshotId,taskId,{limit=256}={}){const seen=new Set(),queue=[snapshotId];while(queue.length&&seen.size<limit){const current=queue.shift();if(seen.has(current))continue;const snapshot=this.memorySnapshot(current,taskId);seen.add(current);queue.push(...snapshot.parentIds)}return seen}
   proposeMemoryMerge(taskId,{baseSnapshotId,oursSnapshotId,theirsSnapshotId,agent='agent'}={}){const base=this.memorySnapshot(baseSnapshotId,taskId),ours=this.memorySnapshot(oursSnapshotId,taskId),theirs=this.memorySnapshot(theirsSnapshotId,taskId);if(!this.memorySnapshotAncestors(ours.snapshot_id,taskId).has(base.snapshot_id)||!this.memorySnapshotAncestors(theirs.snapshot_id,taskId).has(base.snapshot_id))throw new CheckpointError('merge base must be an ancestor of both snapshots');const maps=[base,ours,theirs].map(s=>new Map(s.memories.map(m=>[m.conflict_key,m]))),keys=new Set(maps.flatMap(m=>[...m.keys()])),claimIds=[],conflicts=[];for(const key of keys){const [b,o,t]=maps.map(m=>m.get(key)),same=(x,y)=>x?.fingerprint===y?.fingerprint;let chosen;if(same(o,t))chosen=o;else if(same(o,b))chosen=t;else if(same(t,b))chosen=o;else if(!o&&t)chosen=t;else if(o&&!t)chosen=o;else {const candidates=[o,t].filter(Boolean);chosen=candidates.sort((a,z)=>(z.created_at??0)-(a.created_at??0)||z.memory_id.localeCompare(a.memory_id))[0];conflicts.push({conflictKey:key,memoryIds:candidates.map(x=>x.memory_id),selectedMemoryId:chosen?.memory_id,subject:candidates[0]?.subject,predicate:candidates[0]?.predicate,baseMemoryId:b?.memory_id,oursMemoryId:o?.memory_id,theirsMemoryId:t?.memory_id,candidates:candidates.map(x=>({memoryId:x.memory_id,value:x.value,evidenceIds:x.evidenceIds,status:x.status}))});}if(chosen)claimIds.push(chosen.memory_id)}const proposal={agent,baseSnapshotId,oursSnapshotId,theirsSnapshotId,claimIds:[...new Set(claimIds)],conflicts};const mergeId=id('merge');const t=this.getTask(taskId);this.db.prepare('INSERT INTO memory_merge_proposals VALUES(?,?,?,?,?,?,?,?,?)').run(mergeId,taskId,baseSnapshotId,oursSnapshotId,theirsSnapshotId,JSON.stringify(proposal),'ready',now(),now());return {mergeId,status:'ready',...proposal}}
   memoryMergeProposal(mergeId,taskId){const r=this.row('SELECT * FROM memory_merge_proposals WHERE merge_id=?',mergeId);if(!r||r.task_id!==taskId)throw new ScopeError('memory merge scope mismatch');return {...r,proposal:JSON.parse(r.proposal_json)}}
-  commitMemoryMerge(taskId,mergeId,{expectedRevision,epoch,message='memory merge',author='host',resolutions={},sourceEvent}={}){const proposal=this.memoryMergeProposal(mergeId,taskId),t=this.getTask(taskId);expectedRevision??=t.revision;epoch??=t.epoch;if(proposal.status==='committed')throw new ContinuityError('memory merge proposal is already committed');const ids=[...proposal.proposal.claimIds];for(const conflict of proposal.proposal.conflicts){const selected=resolutions[conflict.conflictKey]??conflict.selectedMemoryId??conflict.memoryIds[0];if(conflict.memoryIds.includes(selected))ids.push(selected)}const snap=this.createMemorySnapshot(taskId,{epoch,revision:expectedRevision,parentIds:[proposal.ours_snapshot_id,proposal.theirs_snapshot_id],memoryIds:[...new Set(ids)],message,author});this.tx(()=>{this.db.prepare('UPDATE memory_merge_proposals SET status=\'committed\',updated_at=? WHERE merge_id=? AND task_id=?').run(now(),mergeId,taskId);this.recordEvent(taskId,'memory_merge_committed',{mergeId,snapshotId:snap.snapshot_id,resolutions,sourceEvent},{epoch:t.epoch})});return snap}
+  commitMemoryMerge(taskId,mergeId,{expectedRevision,epoch,message='memory merge',author='host',resolutions={},sourceEvent}={}){
+    return this.tx(()=>{
+      const record=this.memoryMergeProposal(mergeId,taskId),task=this.getTask(taskId);
+      expectedRevision??=task.revision;epoch??=task.epoch;
+      if(epoch!==task.epoch)throw new EpochMismatch('stale memory merge epoch');
+      if(expectedRevision!==task.revision)throw new StaleRevision('stale memory merge revision');
+      if(record.status==='committed')throw new ContinuityError('memory merge proposal is already committed');
+      const proposal=record.proposal,selected=new Set(proposal.claimIds);
+      const snapshots=[this.memorySnapshot(record.base_snapshot_id,taskId),this.memorySnapshot(record.ours_snapshot_id,taskId),this.memorySnapshot(record.theirs_snapshot_id,taskId)];
+      const versions=new Map(snapshots.flatMap(snapshot=>snapshot.memories.map(memory=>[memory.memory_id,memory.version_id])));
+      for(const conflict of proposal.conflicts){
+        const choice=resolutions[conflict.conflictKey]??conflict.selectedMemoryId??conflict.memoryIds[0];
+        if(!conflict.memoryIds.includes(choice))throw new ScopeError('merge resolution must reference a conflict candidate');
+        for(const memoryId of conflict.memoryIds)selected.delete(memoryId);
+        selected.add(choice);
+      }
+      const snapshot=this.createMemorySnapshot(taskId,{epoch,revision:expectedRevision,parentIds:[record.ours_snapshot_id,record.theirs_snapshot_id],versionIds:[...selected].map(memoryId=>versions.get(memoryId)),message,author});
+      this.db.prepare("UPDATE memory_merge_proposals SET status='committed',updated_at=? WHERE merge_id=? AND task_id=?").run(now(),mergeId,taskId);
+      this.recordEvent(taskId,'memory_merge_committed',{mergeId,snapshotId:snapshot.snapshot_id,resolutions,sourceEvent},{epoch});
+      return snapshot;
+    });
+  }
   compressContext(taskId,options){return this.contextEngine.compressContext(taskId,options)}
   compressionView(viewId,taskId){const row=this.row('SELECT * FROM compression_views WHERE view_id=?',viewId);if(!row||row.task_id!==taskId)throw new ScopeError('compression view scope mismatch');return {...row,sourceEventIds:JSON.parse(row.source_event_ids_json),sourceMemoryIds:JSON.parse(row.source_memory_ids_json),omittedEventIds:JSON.parse(row.omitted_event_ids_json),payload:JSON.parse(row.payload_json)};}
-  expandCompressionView(viewId,taskId,{includeOmitted=false}={}){const view=this.compressionView(viewId,taskId),ids=includeOmitted?view.sourceEventIds:(view.payload.keptEventIds??[]),events=ids.length?this.db.prepare(`SELECT * FROM events WHERE task_id=? AND event_id IN (${ids.map(()=>'?').join(',')}) ORDER BY seq`).all(taskId,...ids):[],memories=view.sourceMemoryIds.map(memoryId=>this.memoryClaim(memoryId,taskId));return {view,events,memories};}
+  expandCompressionView(viewId,taskId,{includeOmitted=false}={}){const view=this.compressionView(viewId,taskId),ids=includeOmitted?view.sourceEventIds:(view.payload.keptEventIds??[]),events=ids.length?this.db.prepare(`SELECT * FROM events WHERE task_id=? AND event_id IN (${ids.map(()=>'?').join(',')}) ORDER BY seq`).all(taskId,...ids):[],memories=view.payload.sourceMemoryVersionIds?view.payload.sourceMemoryVersionIds.map(versionId=>this.memory.version(versionId,taskId)):view.sourceMemoryIds.map(memoryId=>this.memoryClaim(memoryId,taskId));return {view,events,memories};}
   compressMemorySnapshot(snapshotId,taskId,{maxClaims=32}={}){const snapshot=this.memorySnapshot(snapshotId,taskId),groups=new Map();for(const claim of snapshot.memories){const key=claim.conflict_key;const group=groups.get(key)??{scope:claim.scope,subject:claim.subject,predicate:claim.predicate,values:[],memoryIds:[]};group.values.push(claim.value);group.memoryIds.push(claim.memory_id);groups.set(key,group)}const entries=[...groups.values()].sort((a,b)=>a.subject.localeCompare(b.subject)||a.predicate.localeCompare(b.predicate));return {format:'pi-continuity-memory-compression-v1',snapshotId,claimCount:snapshot.memories.length,groups:entries.slice(0,Math.max(1,Number(maxClaims)||32)),truncated:entries.length>maxClaims}}
   exportMemory(taskId,{snapshotId=null}={}){const t=this.getTask(taskId),snapshot=snapshotId?this.memorySnapshot(snapshotId,taskId):this.createMemorySnapshot(taskId,{message:'portable export',author:'host'});return {format:'pi-continuity-memory-bundle-v1',projectId:t.project_id,branch:t.branch,taskId,sourceSnapshot:{snapshotId:snapshot.snapshot_id,parentIds:snapshot.parentIds,epoch:snapshot.epoch,revision:snapshot.revision,message:snapshot.message,author:snapshot.author,createdAt:snapshot.created_at},claims:snapshot.memories.map(({value_json,evidence_ids_json,...claim})=>({scope:claim.scope,subject:claim.subject,predicate:claim.predicate,value:claim.value,status:claim.status,evidenceIds:claim.evidenceIds,createdAt:claim.created_at}))}}
   importMemory(taskId,epoch,bundle,{scopePrefix='' }={}){if(!bundle||bundle.format!=='pi-continuity-memory-bundle-v1')throw new ContinuityError('unsupported memory bundle');const imported=[];for(const claim of bundle.claims??[]){const result=this.recordMemoryClaim(taskId,epoch,{scope:scopePrefix?`${scopePrefix}:${claim.scope}`:claim.scope,subject:claim.subject,predicate:claim.predicate,value:claim.value,evidenceIds:claim.evidenceIds??[],status:claim.status==='proposed'?'proposed':'confirmed'});imported.push(result.memory)}const snapshot=this.createMemorySnapshot(taskId,{epoch,parentIds:[],memoryIds:imported.map(x=>x.memory_id),message:`import from ${bundle.projectId??'external system'}`,author:'import'});return {snapshot,claims:imported}}
@@ -156,8 +180,10 @@ recallMemory(taskId,query,{limit=8,scope,includeCandidates=false}={}){this.getTa
     if(memorySnapshotId){const snap=this.memorySnapshot(memorySnapshotId,taskId);if(snap.epoch!==epoch||snap.revision!==expectedRevision)throw new CheckpointError('memory snapshot version does not match checkpoint')}
     this.refreshNotebook(taskId);
     const notebookIds=this.notebook.snapshot(taskId),noteIds=this.notes(taskId,epoch).map(n=>n.note_id);
+    const memoryVersionIds=(memorySnapshotId?this.memorySnapshot(memorySnapshotId,taskId).memories:this.memoryClaims(taskId,{includeCandidates:true})).map(memory=>memory.version_id);
+    const observerPending=this.notebook.observerState(taskId).rows.map(row=>({eventId:row.event_id,offset:row.offset}));
     const visibleSeq=this.row('SELECT COALESCE(MAX(seq),0) AS n FROM events WHERE task_id=? AND epoch=?',taskId,epoch).n;
-    const cid=id('ckpt'),payload={taskId,revision:expectedRevision,epoch,workspace,pending,notes,memorySnapshotId,notebookIds,noteIds,visibleSeq,format:2};
+    const cid=id('ckpt'),payload={taskId,revision:expectedRevision,epoch,workspace,pending,notes,memorySnapshotId,memoryVersionIds,notebookIds,noteIds,observerPending,visibleSeq,format:3};
     this.db.prepare('INSERT INTO checkpoints VALUES(?,?,?,?,?,?,?)').run(cid,taskId,expectedRevision,epoch,'BUILDING',JSON.stringify(payload),now());
     if(!publish)return cid;
     try{this.db.prepare("UPDATE checkpoints SET state='READY' WHERE checkpoint_id=?").run(cid)}catch(e){this.db.prepare("UPDATE checkpoints SET state='FAILED' WHERE checkpoint_id=?").run(cid);throw e}
@@ -177,7 +203,11 @@ recallMemory(taskId,query,{limit=8,scope,includeCandidates=false}={}){this.getTa
     return this.tx(()=>{
       const nt=this.bumpEpoch(taskId,expectedRevision);
       const seedEventIds=c.payload.notebookIds===undefined?this.checkpointEvents(cid,taskId).filter(e=>['user_input','model_response','tool_result'].includes(e.source)).map(e=>e.event_id):[];
-      this.recordEvent(taskId,'resume',{checkpointId:cid,mode,sourceEpoch:c.epoch,importEventIds,notebookIds:c.payload.notebookIds??[],noteIds:c.payload.noteIds??[],seedEventIds},{epoch:nt.epoch});
+      const selectedMemory=new Map(this.memory.checkpointVersions(c,nt.epoch).map(versionId=>{const memory=this.memory.version(versionId,taskId);return [memory.memory_id,versionId]}));
+      for(const memory of this.memory.importVersions(taskId,importEventIds))selectedMemory.set(memory.memory_id,memory.version_id);
+      const memoryVersionIds=[...selectedMemory.values()];
+      const observerPending=this.notebook.checkpointObserverState(c,importEventIds);
+      this.recordEvent(taskId,'resume',{checkpointId:cid,mode,sourceEpoch:c.epoch,importEventIds,memoryVersionIds,observerPending,notebookIds:c.payload.notebookIds??[],noteIds:c.payload.noteIds??[],seedEventIds},{epoch:nt.epoch});
       return {taskId,checkpointId:cid,mode,epoch:nt.epoch,contractRevision:nt.revision,payload:c.payload};
     });
   }

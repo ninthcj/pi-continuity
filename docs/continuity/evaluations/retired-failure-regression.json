@@ -1,0 +1,304 @@
+{
+  "date": "2026-09-15T11:33:07.902Z",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "data": "synthetic fixtures only",
+  "cases": [
+    {
+      "name": "failed-plan",
+      "passed": true,
+      "checks": {
+        "failureRetained": true,
+        "correctionSurvivedCompactionAndRecovery": true,
+        "resolvedConnectionNotStillBlocked": true,
+        "modelObservationsRemainProposed": true
+      },
+      "stages": 2,
+      "notes": [
+        {
+          "key": "user:evt_afb18882f0214d8782e0404e16ce8ad0",
+          "category": "instruction",
+          "status": "confirmed",
+          "text": "用户纠正：仅允许在 staging 验证，禁止更改 production。"
+        },
+        {
+          "key": "staging-migration-plan",
+          "category": "pending",
+          "status": "proposed",
+          "text": "Staging migration plan validation is unfinished; a migration was proposed but no command has been executed."
+        },
+        {
+          "key": "staging-connection-failure",
+          "category": "blocker",
+          "status": "retired",
+          "text": "Connection to staging failed with ECONNREFUSED; no migration ran and no tests passed, blocking validation work."
+        },
+        {
+          "key": "staging-dry-run-validation",
+          "category": "fact",
+          "status": "proposed",
+          "text": "Connection to staging succeeded and dry-run validation passed; no production deployment was performed."
+        }
+      ]
+    },
+    {
+      "name": "partial-completion",
+      "passed": true,
+      "checks": {
+        "completedAuthItemRetired": true,
+        "unrelatedBillingFailureRemainedPending": true,
+        "verifiedBillingNoLongerPending": true,
+        "wholeTaskCorrectionRetained": true
+      },
+      "stages": 3,
+      "notes": [
+        {
+          "key": "auth-timeout",
+          "category": "fact",
+          "status": "retired",
+          "text": "Authentication timeout was fixed and the auth test passed."
+        },
+        {
+          "key": "user:evt_eaa3b051184946e6aa1e954c08ae07d7",
+          "category": "instruction",
+          "status": "confirmed",
+          "text": "Do not mark the whole task complete after the first fix."
+        },
+        {
+          "key": "billing-unverified",
+          "category": "fact",
+          "status": "retired",
+          "text": "Billing integration test now passed; the auth regression test also passed, and both requested fixes are verified."
+        }
+      ]
+    },
+    {
+      "name": "large-event-tail",
+      "passed": false,
+      "checks": {
+        "finalFailureRetained": false,
+        "allSourceFragmentsProcessed": true,
+        "compressionWithinBudget": true
+      },
+      "stages": 1,
+      "notes": [
+        {
+          "key": "read-large-diagnostic-result",
+          "category": "fact",
+          "status": "retired",
+          "text": "The final portion of the large diagnostic result (chars 13457-13532 of 13532) has been observed: it ends with \"ification failed due to a checksum mismatch. The release remains blocked.\" The full result is now read through its final failure."
+        }
+      ]
+    }
+  ],
+  "calls": [
+    {
+      "case": "failed-plan",
+      "batch": 0,
+      "milliseconds": 1192,
+      "stopReason": "stop",
+      "usage": {
+        "input": 742,
+        "output": 150,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 892,
+        "cost": {
+          "input": 0.0002226,
+          "output": 0.00017999999999999998,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0004026
+        }
+      },
+      "sourceEventIds": [
+        "evt_1d6076a47d354f29bd24fa378d1a4104",
+        "evt_afb18882f0214d8782e0404e16ce8ad0",
+        "evt_7d3991140e9f4147ba43a381143fdb8d",
+        "evt_8e0dec555f8e4f468a84a3b8d6e71d23"
+      ],
+      "observations": "{\"entries\":[{\"key\":\"staging-migration-plan\",\"category\":\"pending\",\"text\":\"Staging migration plan validation is unfinished; a migration was proposed but no command has been executed.\",\"evidenceIds\":[\"evt_7d3991140e9f4147ba43a381143fdb8d\"],\"retire\":false},{\"key\":\"staging-connection-failure\",\"category\":\"blocker\",\"text\":\"Connection to staging failed with ECONNREFUSED; no migration ran and no tests passed, blocking validation work.\",\"evidenceIds\":[\"evt_8e0dec555f8e4f468a84a3b8d6e71d23\"],\"retire\":false}]}"
+    },
+    {
+      "case": "failed-plan",
+      "batch": 0,
+      "milliseconds": 1274,
+      "stopReason": "stop",
+      "usage": {
+        "input": 513,
+        "output": 205,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 974,
+        "cost": {
+          "input": 0.0001539,
+          "output": 0.00024599999999999996,
+          "cacheRead": 0.000001536,
+          "cacheWrite": 0,
+          "total": 0.00040143599999999997
+        }
+      },
+      "sourceEventIds": [
+        "evt_73c166e4aaaa463d8e283e80e490a471"
+      ],
+      "observations": "{\"entries\":[{\"key\":\"staging-connection-failure\",\"category\":\"blocker\",\"text\":\"Connection to staging failed with ECONNREFUSED; no migration ran and no tests passed, blocking validation work.\",\"evidenceIds\":[\"evt_73c166e4aaaa463d8e283e80e490a471\"],\"retire\":true},{\"key\":\"staging-migration-plan\",\"category\":\"pending\",\"text\":\"Staging migration plan validation is unfinished; a migration was proposed but no command has been executed.\",\"evidenceIds\":[\"evt_73c166e4aaaa463d8e283e80e490a471\"],\"retire\":false},{\"key\":\"staging-dry-run-validation\",\"category\":\"fact\",\"text\":\"Connection to staging succeeded and dry-run validation passed; no production deployment was performed.\",\"evidenceIds\":[\"evt_73c166e4aaaa463d8e283e80e490a471\"],\"retire\":false}]}"
+    },
+    {
+      "case": "partial-completion",
+      "batch": 0,
+      "milliseconds": 783,
+      "stopReason": "stop",
+      "usage": {
+        "input": 629,
+        "output": 117,
+        "cacheRead": 128,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 874,
+        "cost": {
+          "input": 0.00018869999999999998,
+          "output": 0.0001404,
+          "cacheRead": 7.68e-7,
+          "cacheWrite": 0,
+          "total": 0.000329868
+        }
+      },
+      "sourceEventIds": [
+        "evt_3708e1dce3f34c6ab0a6caa5c9d38232",
+        "evt_eaa3b051184946e6aa1e954c08ae07d7",
+        "evt_af34b824b6d2496eb2680cab996145d0"
+      ],
+      "observations": "{\"entries\":[{\"key\":\"auth-timeout\",\"category\":\"pending\",\"text\":\"Resolve the authentication timeout and verify its test.\",\"evidenceIds\":[\"evt_af34b824b6d2496eb2680cab996145d0\"],\"retire\":false},{\"key\":\"billing-unverified\",\"category\":\"pending\",\"text\":\"Billing integration is unverified and still needs to be finished.\",\"evidenceIds\":[\"evt_af34b824b6d2496eb2680cab996145d0\"],\"retire\":false}]}"
+    },
+    {
+      "case": "partial-completion",
+      "batch": 0,
+      "milliseconds": 867,
+      "stopReason": "stop",
+      "usage": {
+        "input": 487,
+        "output": 119,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 862,
+        "cost": {
+          "input": 0.0001461,
+          "output": 0.0001428,
+          "cacheRead": 0.000001536,
+          "cacheWrite": 0,
+          "total": 0.00029043600000000004
+        }
+      },
+      "sourceEventIds": [
+        "evt_3ccc100f264349cbaf59669dede57a9a"
+      ],
+      "observations": "{\"entries\":[{\"key\":\"auth-timeout\",\"category\":\"fact\",\"text\":\"Authentication timeout was fixed and the auth test passed.\",\"evidenceIds\":[\"evt_3ccc100f264349cbaf59669dede57a9a\"],\"retire\":true},{\"key\":\"billing-unverified\",\"category\":\"blocker\",\"text\":\"Billing integration test failed with an invoice mismatch; the overall task remains unfinished.\",\"evidenceIds\":[\"evt_3ccc100f264349cbaf59669dede57a9a\"],\"retire\":false}]}"
+    },
+    {
+      "case": "partial-completion",
+      "batch": 0,
+      "milliseconds": 823,
+      "stopReason": "stop",
+      "usage": {
+        "input": 483,
+        "output": 73,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 812,
+        "cost": {
+          "input": 0.0001449,
+          "output": 0.0000876,
+          "cacheRead": 0.000001536,
+          "cacheWrite": 0,
+          "total": 0.00023403600000000002
+        }
+      },
+      "sourceEventIds": [
+        "evt_168645ba4d614c0cae9f5e40670fd70c"
+      ],
+      "observations": "{\"entries\":[{\"key\":\"billing-unverified\",\"category\":\"fact\",\"text\":\"Billing integration test now passed; the auth regression test also passed, and both requested fixes are verified.\",\"evidenceIds\":[\"evt_168645ba4d614c0cae9f5e40670fd70c\"],\"retire\":true}]}"
+    },
+    {
+      "case": "large-event-tail",
+      "batch": 0,
+      "milliseconds": 774,
+      "stopReason": "stop",
+      "usage": {
+        "input": 1781,
+        "output": 123,
+        "cacheRead": 128,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 2032,
+        "cost": {
+          "input": 0.0005342999999999999,
+          "output": 0.00014759999999999998,
+          "cacheRead": 7.68e-7,
+          "cacheWrite": 0,
+          "total": 0.0006826679999999999
+        }
+      },
+      "sourceEventIds": [
+        "evt_4328113df36540c791ad28fc600e7b2a",
+        "evt_56458dbc510b48c182ca4eb2e1b55185"
+      ],
+      "observations": "{\"entries\":[{\"key\":\"read-large-diagnostic-result\",\"category\":\"pending\",\"text\":\"The large diagnostic result has not been fully read: only the first fragment (chars 0-6947 of 13532) is available, and it contains only repeated progress lines with no final result yet. The final failure has not been observed.\",\"evidenceIds\":[\"evt_4328113df36540c791ad28fc600e7b2a\",\"evt_56458dbc510b48c182ca4eb2e1b55185\"],\"retire\":false}]}"
+    },
+    {
+      "case": "large-event-tail",
+      "batch": 1,
+      "milliseconds": 934,
+      "stopReason": "stop",
+      "usage": {
+        "input": 1655,
+        "output": 112,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 2023,
+        "cost": {
+          "input": 0.0004965,
+          "output": 0.0001344,
+          "cacheRead": 0.000001536,
+          "cacheWrite": 0,
+          "total": 0.000632436
+        }
+      },
+      "sourceEventIds": [
+        "evt_56458dbc510b48c182ca4eb2e1b55185"
+      ],
+      "observations": "{\"entries\":[{\"key\":\"read-large-diagnostic-result\",\"category\":\"pending\",\"text\":\"The large diagnostic result has not been fully read: fragments covering chars 0-6947 and 6947-13457 of 13532 are available, but the second fragment is truncated mid-string (\\\"FINAL RESULT: backup ver\\\") and the final failure has not been observed.\",\"evidenceIds\":[\"evt_56458dbc510b48c182ca4eb2e1b55185\"],\"retire\":false}]}"
+    },
+    {
+      "case": "large-event-tail",
+      "batch": 2,
+      "milliseconds": 716,
+      "stopReason": "stop",
+      "usage": {
+        "input": 375,
+        "output": 107,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 738,
+        "cost": {
+          "input": 0.0001125,
+          "output": 0.0001284,
+          "cacheRead": 0.000001536,
+          "cacheWrite": 0,
+          "total": 0.000242436
+        }
+      },
+      "sourceEventIds": [
+        "evt_56458dbc510b48c182ca4eb2e1b55185"
+      ],
+      "observations": "{\"entries\":[{\"key\":\"read-large-diagnostic-result\",\"category\":\"fact\",\"text\":\"The final portion of the large diagnostic result (chars 13457-13532 of 13532) has been observed: it ends with \\\"ification failed due to a checksum mismatch. The release remains blocked.\\\" The full result is now read through its final failure.\",\"evidenceIds\":[\"evt_56458dbc510b48c182ca4eb2e1b55185\"],\"retire\":true}]}"
+    }
+  ],
+  "passed": false,
+  "scope": "A small live regression baseline with case-specific checks, not a general quality guarantee."
+}

@@ -1,0 +1,57 @@
+{
+  "date": "2026-09-15T11:23:50.552Z",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "data": "synthetic fixtures only",
+  "cases": [],
+  "calls": [
+    {
+      "case": "failed-plan",
+      "batch": 0,
+      "milliseconds": 1493,
+      "stopReason": "stop",
+      "usage": {
+        "input": 652,
+        "output": 114,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 766,
+        "cost": {
+          "input": 0.00019559999999999998,
+          "output": 0.0001368,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00033239999999999995
+        }
+      }
+    },
+    {
+      "case": "failed-plan",
+      "batch": 0,
+      "milliseconds": 889,
+      "stopReason": "stop",
+      "usage": {
+        "input": 498,
+        "output": 145,
+        "cacheRead": 128,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 771,
+        "cost": {
+          "input": 0.0001494,
+          "output": 0.000174,
+          "cacheRead": 7.68e-7,
+          "cacheWrite": 0,
+          "total": 0.000324168
+        }
+      }
+    }
+  ],
+  "error": {
+    "name": "Error",
+    "message": "observer has duplicate keys or unsupported evidence"
+  },
+  "passed": false,
+  "scope": "A small live regression baseline with case-specific checks, not a general quality guarantee."
+}

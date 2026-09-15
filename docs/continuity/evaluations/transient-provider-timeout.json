@@ -1,0 +1,42 @@
+{
+  "date": "2026-09-15T11:24:40.700Z",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "data": "synthetic fixtures only",
+  "cases": [],
+  "calls": [
+    {
+      "case": "failed-plan",
+      "batch": 0,
+      "milliseconds": 59854,
+      "stopReason": "aborted",
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "sourceEventIds": [
+        "evt_b18fd54b7f4b41ab8a258a85c6c1d2a2",
+        "evt_5228e8cc99a44123bbd5c4ad4a6d1449",
+        "evt_7089648745954454803256a486997a53",
+        "evt_8e43f396761e452dbeee358ffb1d4837"
+      ],
+      "observations": ""
+    }
+  ],
+  "error": {
+    "name": "Error",
+    "message": "notebook observer cancelled"
+  },
+  "passed": false,
+  "scope": "A small live regression baseline with case-specific checks, not a general quality guarantee."
+}

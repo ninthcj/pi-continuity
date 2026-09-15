@@ -97,7 +97,7 @@ export default function continuity(pi, { notebookMode = process.env.PI_CONTINUIT
     }
     try {
       const view = store.compressContext(task.task_id, { epoch: task.epoch, budget });
-      return { compaction: { summary: renderCompression(view), firstKeptEntryId: preparation.firstKeptEntryId, tokensBefore: preparation.tokensBefore ?? view.tokensBefore, details: { viewId: view.viewId, strategy: 'notebook-extract-v4', tokensAfter:view.tokensAfter, metrics:view.metrics, sourceEventIds: view.sourceEventIds, omittedEventIds: view.omittedEventIds } } };
+      return { compaction: { summary: renderCompression(view), firstKeptEntryId: preparation.firstKeptEntryId, tokensBefore: preparation.tokensBefore ?? view.tokensBefore, details: { viewId: view.viewId, strategy: 'notebook-extract-v5', tokensAfter:view.tokensAfter, metrics:view.metrics, sourceEventIds: view.sourceEventIds, omittedEventIds: view.omittedEventIds } } };
     } catch(error) {
       store.recordWork(task.task_id,'pi_session_compact_failed',{errorMessage:String(error)});
       try {store.transition(task.task_id,'RECOVERY_REQUIRED',String(error));} catch {}

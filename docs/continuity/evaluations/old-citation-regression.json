@@ -1,0 +1,68 @@
+{
+  "date": "2026-09-15T11:33:43.104Z",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "data": "synthetic fixtures only",
+  "cases": [],
+  "calls": [
+    {
+      "case": "failed-plan",
+      "batch": 0,
+      "milliseconds": 1072,
+      "stopReason": "stop",
+      "usage": {
+        "input": 663,
+        "output": 147,
+        "cacheRead": 128,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 938,
+        "cost": {
+          "input": 0.00019889999999999998,
+          "output": 0.0001764,
+          "cacheRead": 7.68e-7,
+          "cacheWrite": 0,
+          "total": 0.00037606799999999996
+        }
+      },
+      "sourceEventIds": [
+        "evt_8a4149dc1c924ebfb5fb47df14387698",
+        "evt_1a03e90f903641698c61858dbf9a1c35",
+        "evt_8036fb37bf5b4d9d83c698610557e6b7",
+        "evt_51f1a672bfad4dd78cb5d3ffa2e80594"
+      ],
+      "observations": "{\"entries\":[{\"key\":\"staging-connection-failure\",\"category\":\"blocker\",\"text\":\"Connection to staging failed with ECONNREFUSED; no migration ran and no tests passed, so staging validation cannot proceed.\",\"evidenceIds\":[\"evt_51f1a672bfad4dd78cb5d3ffa2e80594\"],\"retire\":false},{\"key\":\"migration-plan-not-executed\",\"category\":\"observation\",\"text\":\"A migration was proposed as a plan only; no command has been executed.\",\"evidenceIds\":[\"evt_8036fb37bf5b4d9d83c698610557e6b7\"],\"retire\":false}]}"
+    },
+    {
+      "case": "failed-plan",
+      "batch": 0,
+      "milliseconds": 793,
+      "stopReason": "stop",
+      "usage": {
+        "input": 568,
+        "output": 147,
+        "cacheRead": 256,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 971,
+        "cost": {
+          "input": 0.0001704,
+          "output": 0.0001764,
+          "cacheRead": 0.000001536,
+          "cacheWrite": 0,
+          "total": 0.000348336
+        }
+      },
+      "sourceEventIds": [
+        "evt_6e251f18886c4315bbbe88d4b3ffd427"
+      ],
+      "observations": "{\"entries\":[{\"key\":\"staging-connection-failure\",\"category\":\"blocker\",\"text\":\"Connection to staging failed with ECONNREFUSED; no migration ran and no tests passed, so staging validation cannot proceed.\",\"evidenceIds\":[\"evt_51f1a672bfad4dd78cb5d3ffa2e80594\"],\"retire\":true},{\"key\":\"staging-connection-succeeded\",\"category\":\"fact\",\"text\":\"Connection to staging succeeded and dry-run validation passed; no production deployment was performed.\",\"evidenceIds\":[\"evt_6e251f18886c4315bbbe88d4b3ffd427\"],\"retire\":false}]}"
+    }
+  ],
+  "error": {
+    "name": "Error",
+    "message": "observer evidence must reference the current source batch"
+  },
+  "passed": false,
+  "scope": "A small live regression baseline with case-specific checks, not a general quality guarantee."
+}

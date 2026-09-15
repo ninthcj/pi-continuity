@@ -54,7 +54,7 @@ npm pack
 In your destination project, install the archive. Replace the example path with the actual archive path:
 
 ```sh
-npm install ../pi-continuity/pi-continuity-0.1.1.tgz
+npm install ../pi-continuity/pi-continuity-0.1.2.tgz
 ```
 
 Create `.pi/extensions/continuity.mjs` in the destination project:
@@ -136,13 +136,17 @@ Set `PI_CONTINUITY_MODE` for the Pi extension or pass `mode` to the core/host:
 
 The Pi integration stores its database and task pointer under the project's `.pi/` directory. Large payloads use a content-addressed blob store. Pi's native JSONL sessions remain managed by Pi. Preserve the database and its referenced blobs together when moving or backing up state.
 
+Memory snapshots and checkpoints pin immutable claim versions, including their status, origin and evidence. Strict recovery excludes later claims and conflicts from ordinary recall and context; `includeHistory: true` and explicit ID reads remain available for historical inspection. Memory writes require the current epoch and, when supplied, the current revision. Existing databases migrate additively on open.
+
 Memory snapshots and merges preserve claim history. Selected-file snapshots provide portable byte storage; they do not restore a whole worktree. Optional OS snapshot support depends on the filesystem and process permissions.
 
 ## Validation and limits
 
-The current offline suite has **83 passing tests**. It covers retention of Chinese corrections, long archived inputs, budget rejection, note revision/retirement, checkpoint recovery, observer authority, and real Pi SDK integration using a faux provider. A separate fresh-project package installation also passed.
+Version **0.1.2** has **102 passing offline tests**, including strict memory recovery, stale-write rejection, resumable oversized observer inputs, compression scaling, and real Pi SDK integration using a faux provider. A separate fresh-project package installation also passed.
 
-- Live-model semantic quality has not been benchmarked. Evidence links establish provenance, not the correctness of an interpretation.
+In one same-machine synthetic sample with 256 diagnostic events, first compression fell from **2,466 ms to 96 ms**, with full token measurements reduced from 256 to 13. These are individual measurements, not a latency guarantee; see the [reproducible benchmark](docs/continuity/benchmarks/README.md).
+
+- A configured DeepSeek model passed all three [live development fixtures](docs/continuity/evaluations/README.md) after prompt refinement. Earlier failures and timeouts are retained. These cases were used during development; they are not a held-out quality benchmark. Evidence links establish provenance, not the correctness of an interpretation.
 - Default token counts use `cl100k_base` with a margin for full requests. Supply `countRequestTokens(context, model)` for a provider-specific counter; multimodal and proprietary serialization costs are not universally exact.
 - Independent hosts still need process coordination or isolation. This library is not a filesystem sandbox.
 - Checkpoint recovery does not perform automatic code/worktree rollback, and unknown external operations are not automatically replayed.

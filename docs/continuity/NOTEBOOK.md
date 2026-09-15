@@ -4,10 +4,10 @@ This release adds an incremental notebook to Pi Continuity. It reuses the existi
 
 ## Install in another Pi project
 
-Use Node 24 (verified with v24.19.0; package minimum is 22.19.0). Clone the repository, run `npm ci`, then run `npm pack` to create `pi-continuity-0.1.1.tgz`. In the destination project, install that archive using its actual path:
+Use Node 24 (verified with v24.19.0; package minimum is 22.19.0). Clone the repository, run `npm ci`, then run `npm pack` to create `pi-continuity-0.1.2.tgz`. In the destination project, install that archive using its actual path:
 
 ```powershell
-npm install ../pi-continuity/pi-continuity-0.1.1.tgz
+npm install ../pi-continuity/pi-continuity-0.1.2.tgz
 New-Item -ItemType Directory -Force .pi/extensions
 ```
 
@@ -38,7 +38,7 @@ $env:PI_CONTINUITY_NOTEBOOK='semantic'
 npx pi
 ```
 
-This enables one bounded native observer batch before compaction. It can incur additional provider usage. `/continuity observe` also runs one batch on demand. The observer can revise or retire proposed notes, but cannot confirm a claim or change confirmed user/host instructions. Invalid JSON, unsupported evidence, cancellation, budget overflow, and stale responses leave the previous semantic notebook intact; the raw ledger remains available.
+This enables one bounded native observer batch before compaction. Oversized source events are split into contiguous JSON fragments with durable offsets; later batches continue without skipping their tail. The observer selects relevant note previews within its input budget; excluded full notes remain in the ledger. Successful observations and fragment progress commit together. Checkpoints freeze the pending source queue and offsets, including queues large enough to require blob archiving. It can incur additional provider usage. `/continuity observe` also runs one batch on demand. The observer can revise or retire proposed notes, but cannot confirm a claim or change confirmed user/host instructions. Invalid JSON, unsupported evidence, cancellation, budget overflow, and stale responses leave the previous semantic notebook intact; the raw ledger remains available.
 
 For a custom host, `store.observeNotebook(taskId, observer)` accepts an async observer returning `{entries:[{key,category,text,evidenceIds,retire?}]}`. `createNotebookObserver` from `pi-continuity/notebook-observer` adapts an existing native `complete(model, context, options)` callback. It records request provenance and returned usage. This is optional; the default offline path needs no API key.
 
@@ -74,6 +74,6 @@ Compression stores an immutable view, source/omission IDs, required-instruction 
 
 ## Verified scope and limits
 
-The regression suite covers unlabelled Chinese corrections, archived long inputs, strict budget rejection, actual rendered counts, note versioning/retirement, provenance and authority checks, observer rollback, full-request gates, repeated compaction and restart/resume. Real Pi SDK tests use an offline faux provider to exercise tools and semantic-observer calls.
+The 102-test regression suite covers unlabelled Chinese corrections, archived long inputs, strict budget rejection, actual rendered counts, note versioning/retirement, provenance and authority checks, observer rollback, full-request gates, repeated compaction and restart/resume. It also covers frozen memory versions, stale duplicate/promotion writes, Unicode fragment progress across restarts, archived recovery queues, and incremental compression scaling. Real Pi SDK tests use an offline faux provider to exercise tools and semantic-observer calls.
 
-No live-model semantic-quality benchmark has been run. Source validation proves where a proposed observation came from, not that the model interpreted it correctly. Multiple simultaneously bound independent hosts still need external process isolation; Pi extension hooks alone do not provide the strict final provider gate.
+Three [live development cases](evaluations/README.md) passed with the configured DeepSeek model after prompt refinement; failed attempts and timeouts are retained. This is not a held-out semantic-quality benchmark. Source validation proves where a proposed observation came from, not that the model interpreted it correctly. Multiple simultaneously bound independent hosts still need external process isolation; Pi extension hooks alone do not provide the strict final provider gate.

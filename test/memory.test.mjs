@@ -149,7 +149,8 @@ test('native snapshot backend mode persists as an application feature setting', 
 
 test('memory history is readable across task epochs without a freshness gate', () => {
   const x = setup();
-  const claim = x.store.recordMemoryClaim(x.task.task_id, 99, { subject: 'history', predicate: 'epoch', value: 99, status: 'proposed' }).memory;
+  const claim = x.store.recordMemoryClaim(x.task.task_id, 1, { subject: 'history', predicate: 'epoch', value: 99, status: 'proposed' }).memory;
+  x.store.bumpEpoch(x.task.task_id, 1);
   assert.equal(x.store.readMemory(claim.memory_id, x.task.task_id).value, 99);
   assert.equal(x.store.recallMemory(x.task.task_id, 'history epoch 99').length, 1);
   close(x);

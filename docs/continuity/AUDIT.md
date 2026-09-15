@@ -1,6 +1,6 @@
 # Implementation audit and boundaries
 
-Current scope (2026-09-15): the core, notebook/context engine, token budget and observer modules, adapters, Pi host/SDK/extension, and 83 offline tests. The verification results are recorded in [VALIDATION.md](VALIDATION.md). This implementation review is not an independent external audit.
+Current scope (2026-09-15): the core, notebook/context engine, token budget and observer modules, adapters, Pi host/SDK/extension, and 102 offline tests. The verification results are recorded in [VALIDATION.md](VALIDATION.md). This implementation review is not an independent external audit.
 
 ## Blocking risk for strict active mode
 
@@ -17,10 +17,10 @@ Pi 0.85.1 exposes `before_provider_request` for payload inspection/replacement, 
 
 The tests assert actual provider/tool call counts, database state, scope, revision, epoch, checkpoint state, restart behavior, path containment, redaction, and bounded manifest output. No test deletes a failure or weakens an isolation assertion to pass.
 
-The previously reproduced user-correction loss and over-budget compression defects are covered by passing regressions. Notebook retirement, checkpoint recovery and observer authority also have targeted coverage. Memory merge is deliberately claim-key based and non-destructive: conflicting claims remain available, while snapshots provide rollback and historical reads. Portable bundles and deterministic compression are presentation/exchange layers; they do not delete claims or rewrite history.
+The previously reproduced user-correction loss and over-budget compression defects are covered by passing regressions. Version 0.1.2 also fixes later-memory leakage after strict recovery, stale memory writes and oversized observer events that could repeatedly block their queue. Recovery now pins immutable memory payloads; observer fragment progress commits with notes and survives checkpoint recovery. Notebook retirement, checkpoint recovery and observer authority also have targeted coverage. Memory merge is deliberately claim-key based and non-destructive: conflicting claims remain available, while snapshots provide rollback and historical reads. Portable bundles and deterministic compression are presentation/exchange layers; they do not delete claims or rewrite history.
 
 ## Notebook release boundaries
 
 The core preserves explicit user statements rather than relying on an observer to infer their importance. Host-authorized note revisions/retirement resolve obsolete instructions; an observer only maintains proposed observations. Failed compaction leaves the prior compression view available. Notebook extraction is an additive projection of the existing event/notes ledger.
 
-The semantic observer runs bounded native-provider batches only when selected. It validates output structure, provenance, authority and freshness; provenance does not prove semantic correctness. Model quality has not been benchmarked against live providers. Text counting reuses pinned js-tiktoken; full-request estimates and provider-specific counters are distinguished explicitly.
+The semantic observer runs bounded native-provider batches only when selected. It validates output structure, provenance, authority and freshness; provenance does not prove semantic correctness. A live DeepSeek development fixture set passed all three cases after prompt refinement; it is not a held-out benchmark or a general model-quality guarantee. Earlier source-citation, blocker classification/retirement failures and provider timeouts are preserved in the evaluation reports. Text counting reuses pinned js-tiktoken; full-request estimates and provider-specific counters are distinguished explicitly.
