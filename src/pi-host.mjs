@@ -22,6 +22,9 @@ export async function createContinuityPiSession({
   acceptance = [],
   constraints = [],
   modelRuntime,
+  countRequestTokens,
+  inputBudget,
+  outputReserve,
   ...sessionOptions
 } = {}) {
   const pi = sdk ?? await import('@earendil-works/pi-coding-agent');
@@ -36,7 +39,7 @@ export async function createContinuityPiSession({
     modelsPath: sessionOptions.modelsPath ?? join(piAgentDir, 'models.json'),
     refreshOnCreate: false,
   });
-  const gatedRuntime = createContinuityModelRuntime(runtime, store, task.task_id, { budget });
+  const gatedRuntime = createContinuityModelRuntime(runtime, store, task.task_id, { budget, countRequestTokens, inputBudget, outputReserve });
   const replacementAware = sessionOptions.replacementAware === true;
   delete sessionOptions.replacementAware;
   const previousHostFlag = process.env.PI_CONTINUITY_HOST;
@@ -47,7 +50,7 @@ export async function createContinuityPiSession({
   let sessionResult;
   try {
     if (replacementAware) {
-      sessionResult = await createContinuityPiRuntime({ sdk: pi, cwd, store, taskId: task.task_id, modelRuntime: runtime, ...sessionOptions });
+      sessionResult = await createContinuityPiRuntime({ sdk: pi, cwd, store, taskId: task.task_id, modelRuntime: runtime, budget, countRequestTokens, inputBudget, outputReserve, ...sessionOptions });
     } else {
       sessionResult = await pi.createAgentSession({ ...sessionOptions, cwd, modelRuntime: gatedRuntime });
     }
@@ -70,14 +73,18 @@ export async function createContinuityPiSession({
   const seenUserMessages = new Set();
   const recordUserMessage = (message, entryId) => {
     if (message?.role !== 'user') return;
+    const blocks = Array.isArray(message.content) ? message.content : [];
     const content = Array.isArray(message.content)
-      ? message.content.filter(block => block?.type === 'text').map(block => block.text).join(' ')
+      ? blocks.filter(block => block?.type === 'text').map(block => block.text).join(' ')
       : String(message.content ?? '');
-    const key = entryId ?? String(message.timestamp ?? '') + ':' + content;
+    const images = blocks.filter(block => block?.type === 'image');
+    const key = entryId ?? String(message.timestamp ?? '') + ':' + content + ':' + images.length;
     if (seenUserMessages.has(key)) return;
     seenUserMessages.add(key);
     const epoch = store.getTask(task.task_id).epoch;
-    store.recordEvent(task.task_id, 'user_input', { text: content, sessionEntryId: entryId }, { epoch });
+    const payload = { text: content, sessionEntryId: entryId };
+    if (images.length) payload.images = images;
+    store.recordEvent(task.task_id, 'user_input', payload, { epoch });
   };
   const onSessionEvent = event => {
     const epoch = store.getTask(task.task_id).epoch;
@@ -162,6 +169,9 @@ export async function createContinuityPiRuntime({
   taskId,
   budget = 12000,
   modelRuntime,
+  countRequestTokens,
+  inputBudget,
+  outputReserve,
   ...sessionOptions
 } = {}) {
   const pi = sdk ?? await import('@earendil-works/pi-coding-agent');
@@ -174,7 +184,7 @@ export async function createContinuityPiRuntime({
   const createRuntime = async ({ cwd: targetCwd, agentDir: targetDir, sessionManager: targetManager, sessionStartEvent }) => {
     if (resolve(targetCwd) !== resolve(cwd)) throw new ScopeError('session replacement cwd is outside the bound project');
     const services = await pi.createAgentSessionServices({ cwd: targetCwd, agentDir: targetDir, modelRuntime });
-    services.modelRuntime = createContinuityModelRuntime(services.modelRuntime, store, taskId, { budget });
+    services.modelRuntime = createContinuityModelRuntime(services.modelRuntime, store, taskId, { budget, countRequestTokens, inputBudget, outputReserve });
     const result = await pi.createAgentSessionFromServices({ services, sessionManager: targetManager, sessionStartEvent, ...sessionOptions });
     return { ...result, services, diagnostics: services.diagnostics };
   };

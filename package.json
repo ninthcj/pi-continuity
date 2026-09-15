@@ -1,1 +1,53 @@
-{"name":"pi-continuity","version":"0.1.0","type":"module","description":"Auditable task continuity core and Pi adapter boundary","bin":{"pi-continuity":"./bin/pi-continuity.mjs","pi-continuity-pi":"./bin/pi-continuity-pi.mjs"},"scripts":{"test":"node --test","demo":"node ./examples/demo.mjs"},"engines":{"node":">=22"},"dependencies":{"@earendil-works/pi-coding-agent":"0.85.1"}}
+{
+  "name": "pi-continuity",
+  "version": "0.1.1",
+  "type": "module",
+  "description": "Auditable task continuity core and Pi adapter boundary",
+  "bin": {
+    "pi-continuity": "./dist/bin/pi-continuity.mjs",
+    "pi-continuity-pi": "./dist/bin/pi-continuity-pi.mjs"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.mjs\" \"test/**/*.ts\"",
+    "demo": "node ./examples/demo.mjs",
+    "test:notebook": "node --test test/notebook.test.mjs",
+    "build": "node scripts/build-package.mjs",
+    "prepack": "npm run build"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "js-tiktoken": "1.0.21"
+  },
+  "exports": {
+    ".": "./dist/core.mjs",
+    "./adapter": "./dist/adapter.mjs",
+    "./pi-host": "./dist/pi-host.mjs",
+    "./pi-sdk": "./dist/pi-sdk.mjs",
+    "./extension": "./dist/pi-extension.mjs",
+    "./notebook-observer": "./dist/notebook-observer.mjs",
+    "./context-budget": "./dist/context-budget.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "docs/continuity/NOTEBOOK.md",
+    "docs/continuity/VALIDATION.md",
+    "docs/continuity/AUDIT.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "docs/continuity/COMPRESSION_RESEARCH.md"
+  ],
+  "license": "MIT",
+  "author": "ninthcj",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ninthcj/pi-continuity.git"
+  },
+  "homepage": "https://github.com/ninthcj/pi-continuity#readme",
+  "bugs": {
+    "url": "https://github.com/ninthcj/pi-continuity/issues"
+  }
+}

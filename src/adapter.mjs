@@ -1,4 +1,5 @@
 import { GateError, EpochMismatch } from './core.mjs';
+import { countRequest, renderManifest } from './context-budget.mjs';
 
 export class FakeProvider {
   constructor(responses = ['continue']) { this.responses = [...responses]; this.calls = []; }
@@ -14,13 +15,15 @@ export class SideEffectTool {
 export class PiAdapter {
   constructor(store, taskId, provider) { this.store = store; this.taskId = taskId; this.provider = provider; }
 
-  request({ messages, budget = 12000 }) {
+  request({ messages, budget = 12000, inputBudget, countRequestTokens, model }) {
     if (this.store.mode === 'off') return this.provider.complete(messages);
     this.store.startRun(this.taskId);
     const manifest = this.store.buildManifest(this.taskId, { budget });
     const effectiveMessages = this.store.mode === 'active'
-      ? [{ role: 'system', content: `[continuity manifest]\n${JSON.stringify(manifest)}` }, ...messages]
+      ? [{ role: 'system', content: renderManifest(manifest) }, ...messages]
       : messages;
+    const counted=countRequest({messages:effectiveMessages},{model,countRequestTokens,counter:this.store.countTokens});
+    if(this.store.mode==='active'&&inputBudget!==undefined&&(!Number.isSafeInteger(inputBudget)||inputBudget<=0||counted.tokens>inputBudget)) throw new GateError('full provider input exceeds context budget');
     const requestBlobId = this.store.saveBlob(JSON.stringify({ messages: effectiveMessages }));
     this.store.recordEvent(this.taskId, 'model_request', { manifestId: manifest.manifestId, requestBlobId });
     try {

@@ -1,6 +1,6 @@
-# Independent audit
+# Implementation audit and boundaries
 
-Audit scope: `src/core.mjs`, `src/adapter.mjs`, `src/pi-sdk.mjs`, `src/pi-host.mjs`, `.pi/extensions/continuity.js`, and the 53 offline tests. The audit was performed after the implementation pass and is separate from the feature checklist.
+Current scope (2026-09-15): the core, notebook/context engine, token budget and observer modules, adapters, Pi host/SDK/extension, and 83 offline tests. The verification results are recorded in [VALIDATION.md](VALIDATION.md). This implementation review is not an independent external audit.
 
 ## Blocking risk for strict active mode
 
@@ -17,4 +17,10 @@ Pi 0.85.1 exposes `before_provider_request` for payload inspection/replacement, 
 
 The tests assert actual provider/tool call counts, database state, scope, revision, epoch, checkpoint state, restart behavior, path containment, redaction, and bounded manifest output. No test deletes a failure or weakens an isolation assertion to pass.
 
-No other high-severity reproducible defect was found in the covered core. Memory merge is deliberately claim-key based and non-destructive: conflicting claims remain available, while snapshots provide rollback and historical reads. Portable bundles and deterministic compression are presentation/exchange layers; they do not delete claims or rewrite history.
+The previously reproduced user-correction loss and over-budget compression defects are covered by passing regressions. Notebook retirement, checkpoint recovery and observer authority also have targeted coverage. Memory merge is deliberately claim-key based and non-destructive: conflicting claims remain available, while snapshots provide rollback and historical reads. Portable bundles and deterministic compression are presentation/exchange layers; they do not delete claims or rewrite history.
+
+## Notebook release boundaries
+
+The core preserves explicit user statements rather than relying on an observer to infer their importance. Host-authorized note revisions/retirement resolve obsolete instructions; an observer only maintains proposed observations. Failed compaction leaves the prior compression view available. Notebook extraction is an additive projection of the existing event/notes ledger.
+
+The semantic observer runs bounded native-provider batches only when selected. It validates output structure, provenance, authority and freshness; provenance does not prove semantic correctness. Model quality has not been benchmarked against live providers. Text counting reuses pinned js-tiktoken; full-request estimates and provider-specific counters are distinguished explicitly.

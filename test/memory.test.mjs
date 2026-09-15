@@ -198,3 +198,31 @@ test('compression candidates stay separate from authoritative memory until promo
   assert.deepEqual(x.store.memoryClaims(x.task.task_id)[0].evidenceIds, ['evt-compress', 'evt-direct']);
   close(x);
 });
+
+test('image events compact to references and remain reloadable on demand', () => {
+  const x = setup();
+  const raw = Buffer.from('fake-image-bytes');
+  const ref = x.store.recordImage(x.task.task_id, raw, { mimeType: 'image/png', width: 320, height: 200, caption: 'A diagram', ocr: 'SQLite', observations: { nodes: 3 } });
+  const manifest = x.store.buildManifest(x.task.task_id);
+  const imageEvent = manifest.events.find(event => event.source === 'image');
+  assert.ok(imageEvent);
+  assert.equal(imageEvent.payload.assetId, ref.assetId);
+  assert.equal(imageEvent.payload.inline, false);
+  assert.equal(imageEvent.payload.derived.caption, 'A diagram');
+  assert.equal(JSON.stringify(manifest).includes('fake-image-bytes'), false);
+  assert.deepEqual(x.store.loadBlob(ref.assetId), raw);
+  close(x);
+});
+
+test('inline provider image payloads are archived before compression', () => {
+  const x = setup();
+  const raw = Buffer.from('provider-image');
+  x.store.recordEvent(x.task.task_id, 'user_input', { type: 'image', source: { type: 'base64', media_type: 'image/png', data: raw.toString('base64') } });
+  const manifest = x.store.buildManifest(x.task.task_id);
+  const imageEvent = manifest.events.find(event => event.source === 'user_input' && event.payload.kind === 'image');
+  assert.ok(imageEvent);
+  assert.equal(imageEvent.payload.inline, false);
+  assert.equal(JSON.stringify(manifest).includes(raw.toString('base64')), false);
+  assert.deepEqual(x.store.loadBlob(imageEvent.payload.assetId), raw);
+  close(x);
+});

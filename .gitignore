@@ -8,3 +8,15 @@ node_modules/
 .coverage/
 .tmp-*
 .migration-backup-*/
+
+dist/
+releases/
+
+# Local credentials and Continuity runtime state
+.env
+.env.*
+!.env.example
+.pi/continuity-task.json
+.pi/sessions/
+.pi/auth.json
+/*.tgz
